@@ -7,7 +7,7 @@ const pool = createPool(config.db);
 const app = createApp(pool, config);
 
 const server = app.listen(config.port, config.host, () => {
-  console.log(`[api] Order Tracker API listening on http://${config.host}:${config.port}`);
+  console.log(`[api] Hospital Management API listening on http://${config.host}:${config.port} (${config.timeZone})`);
 });
 
 function shutdown(): void {

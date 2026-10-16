@@ -18,7 +18,7 @@ export interface TestDb {
 export async function freshDatabase(): Promise<TestDb> {
   const adminUrl = inject('pgAdminUrl');
   const template = inject('pgTemplateDb');
-  const name = `order_tracker_t_${randomBytes(6).toString('hex')}`;
+  const name = `hms_t_${randomBytes(6).toString('hex')}`;
   for (let attempt = 0; ; attempt++) {
     try {
       await adminQuery(adminUrl, `CREATE DATABASE ${name} TEMPLATE ${template}`);

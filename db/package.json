@@ -1,8 +1,8 @@
 {
-  "name": "@order-tracker/db",
-  "version": "1.4.2",
+  "name": "@hms/db",
+  "version": "0.1.0",
   "private": true,
-  "description": "Order Tracker SQL migrations, migration runner, seed script and the throwaway PostgreSQL test harness.",
+  "description": "Hospital Management SQL migrations, migration runner, seed script and the throwaway PostgreSQL test harness.",
   "scripts": {
     "migrate": "tsx scripts/migrate-cli.ts",
     "seed": "tsx seed/seed-cli.ts",
@@ -10,7 +10,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "pg": "^8.13.1"
+    "pg": "^8.13.1",
+    "tsx": "^4.19.2"
   },
   "devDependencies": {
     "@types/pg": "^8.11.10"

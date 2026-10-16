@@ -1,59 +1,62 @@
 import { describe, expect, it } from 'vitest';
-import { loadConfig } from '../src/config';
-import { parseDay, parseId } from '../src/lib/params';
-import { lineTotalCents, orderTotalCents } from '../src/lib/price';
-import { canTransition, isOrderStatus, normaliseStatus } from '../src/lib/status';
+import { formatCode, idFromCode } from '../src/lib/codes';
+import { availabilityProblem, isSlot, slotStarts, withinAvailability } from '../src/lib/slots';
+import { dayBounds, isDay, isoWeekday, localDay, zonedToUtc } from '../src/lib/time';
 
-describe('price', () => {
-  it('adds tax and rounds to whole cents', () => {
-    expect(lineTotalCents({ quantity: 1, unitPriceCents: 1000 })).toBe(1083);
+const TZ = 'Asia/Kolkata';
+
+describe('hospital time zone (NFR-2)', () => {
+  it('maps local wall-clock times to UTC', () => {
+    expect(zonedToUtc('2026-10-19', 9 * 60, TZ).toISOString()).toBe('2026-10-19T03:30:00.000Z');
+    expect(zonedToUtc('2026-03-08', 9 * 60, 'America/New_York').toISOString()).toBe('2026-03-08T13:00:00.000Z');
   });
 
-  it('is zero for an empty order', () => {
-    expect(orderTotalCents([])).toBe(0);
+  it('knows the local day of an instant and its bounds', () => {
+    expect(localDay(new Date('2026-10-19T19:00:00Z'), TZ)).toBe('2026-10-20');
+    expect(dayBounds('2026-10-20', TZ).start.toISOString()).toBe('2026-10-19T18:30:00.000Z');
   });
 
-  it('totals a single-line order', () => {
-    expect(orderTotalCents([{ quantity: 2, unitPriceCents: 1000 }])).toBe(2165);
-  });
-});
-
-describe('status rules', () => {
-  it('follows PLACED -> PACKED -> SHIPPED -> DELIVERED', () => {
-    expect(canTransition('PLACED', 'PACKED')).toBe(true);
-    expect(canTransition('PACKED', 'SHIPPED')).toBe(true);
-    expect(canTransition('SHIPPED', 'DELIVERED')).toBe(true);
-    expect(canTransition('DELIVERED', 'PLACED')).toBe(false);
-  });
-
-  it('treats the legacy SHIPPD spelling as SHIPPED', () => {
-    expect(isOrderStatus('SHIPPD')).toBe(true);
-    expect(normaliseStatus('SHIPPD')).toBe('SHIPPED');
-    expect(canTransition('PACKED', 'SHIPPD')).toBe(true);
-    expect(canTransition('SHIPPD', 'DELIVERED')).toBe(true);
+  it('validates days and weekdays', () => {
+    expect(isDay('2026-02-30')).toBe(false);
+    expect(isoWeekday('2026-10-19')).toBe(1);
+    expect(isoWeekday('2026-10-25')).toBe(7);
   });
 });
 
-describe('params', () => {
-  it('accepts YYYY-MM-DD and rejects other forms', () => {
-    expect(parseDay('2026-09-01', 'from')).toBe('2026-09-01');
-    expect(parseDay(undefined, 'from')).toBeUndefined();
-    expect(() => parseDay('2026-9-1', 'from')).toThrow(/YYYY-MM-DD/);
+describe('slots (APT-2, DOC-7)', () => {
+  const blocks = [
+    { weekday: 1, start: '09:00', end: '10:00' },
+    { weekday: 1, start: '14:00', end: '14:40' },
+  ];
+
+  it('APT-2: cuts each block into slots that end inside it', () => {
+    expect(slotStarts(blocks, 1, 20)).toEqual([540, 560, 580, 840, 860]);
+    expect(slotStarts(blocks, 2, 20)).toEqual([]);
   });
 
-  it('accepts positive integer ids only', () => {
-    expect(parseId('12', 'id')).toBe(12);
-    expect(() => parseId('0', 'id')).toThrow();
-    expect(() => parseId('1e3', 'id')).toThrow();
+  it('APT-2: accepts only slot starts', () => {
+    expect(isSlot(blocks, 20, new Date('2026-10-19T03:50:00Z'), TZ)).toBe(true);
+    expect(isSlot(blocks, 20, new Date('2026-10-19T03:45:00Z'), TZ)).toBe(false);
+  });
+
+  it('DOC-7: tells whether an appointment still fits the availability', () => {
+    const s = new Date('2026-10-19T08:30:00Z');
+    expect(withinAvailability(blocks, s, new Date(s.getTime() + 40 * 60_000), TZ)).toBe(true);
+    expect(withinAvailability(blocks, s, new Date(s.getTime() + 41 * 60_000), TZ)).toBe(false);
+  });
+
+  it('DOC-1: rejects overlapping or inverted blocks', () => {
+    expect(availabilityProblem(blocks)).toBeNull();
+    expect(availabilityProblem([...blocks, { weekday: 1, start: '09:30', end: '11:00' }])).toMatch(/overlap/);
+    expect(availabilityProblem([{ weekday: 2, start: '11:00', end: '10:00' }])).toMatch(/before/);
   });
 });
 
-describe('config', () => {
-  it('defaults to loopback, port 3000 and 7 days of history', () => {
-    expect(loadConfig({})).toMatchObject({ host: '127.0.0.1', port: 3000, orderHistoryDefaultDays: 7, pageSize: 20 });
-  });
-
-  it('needs a database location in production', () => {
-    expect(() => loadConfig({ NODE_ENV: 'production' })).toThrow(/PGHOST/);
+describe('display codes', () => {
+  it('formats and parses D-, P- and A- codes', () => {
+    expect(formatCode('D', 7)).toBe('D-0007');
+    expect(formatCode('P', 42)).toBe('P-000042');
+    expect(idFromCode('P', 'p-000042')).toBe(42);
+    expect(idFromCode('P', 'Meera')).toBeNull();
   });
 });

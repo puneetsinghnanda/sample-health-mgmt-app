@@ -9,13 +9,14 @@ export function notFoundHandler(req: Request, res: Response): void {
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function errorHandler(err: unknown, req: Request, res: Response, _next: NextFunction): void {
   if (err instanceof HttpError) {
-    res.status(err.status).json({ error: { code: err.code, message: err.message } });
+    res.status(err.status).json({ error: { code: err.code, message: err.message, ...err.details } });
     return;
   }
   if (err instanceof SyntaxError && 'body' in err) {
     res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Request body is not valid JSON' } });
     return;
   }
-  console.error(`[api] ${req.method} ${req.path} failed:`, err instanceof Error ? err.message : err);
+  // NFR-6: log the route and the error message only, never request bodies or patient data.
+  console.error(`[api] ${req.method} ${req.route?.path ?? req.path} failed:`, err instanceof Error ? err.message : err);
   res.status(500).json({ error: { code: 'INTERNAL', message: 'Something went wrong' } });
 }

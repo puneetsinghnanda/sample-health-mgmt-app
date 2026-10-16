@@ -1,166 +1,84 @@
-# Order Tracker: brownfield sample system
+# Hospital Management System (MVP)
 
-**Invented data, no client code.** Order Tracker is a small order-tracking app written by
-Truminds to test skills, the reviewer and whole workflows against a realistic "brownfield"
-codebase (TST-01 §4, ADR 0004 (tentative), SDD-06 §10). Every customer, product and order
-is generated: customers are `Test Customer NNN` with `custNNN@example.test` emails. Never add
-client code, client names or real data here (T-01).
+A small hospital front desk: doctors, patients, appointments and a dashboard. It is also the shared product that
+the team extends with AI Skill Library workflows. Requirements are in [docs/PRD.md](docs/PRD.md).
 
-The app contains **planted defects on purpose**. Do not fix them in passing (see
-[Seeded defects](#seeded-defects)).
+**Invented data only.** No real patients, doctors or contact details, anywhere: not in seed data, tests, tickets or
+screenshots.
 
 ## Stack and layout
 
-React 18 + Vite + TypeScript (`web/`), Node.js 22 + Express 4 + TypeScript (`api/`),
-PostgreSQL 16 with plain SQL migrations (`db/`). npm workspaces tie them together.
+Node.js 22, TypeScript, Express API, React 18 web app (Vite), PostgreSQL 16, Vitest. One npm workspace per part:
 
-```text
-examples/sample-system/
-├─ package.json, package-lock.json   npm workspaces: db, api, web
-├─ docker-compose.yml, Dockerfile    local run on loopback only
-├─ api/src/
-│  ├─ routes/          HTTP layer: parse and validate input (orders, customers, products, health)
-│  ├─ services/        rules and transactions (OrderService, CustomerService, ProductService)
-│  ├─ repositories/    SQL only
-│  ├─ lib/             price, status rules, params, errors, dates
-│  ├─ middleware/      error handler, request log, async wrapper
-│  └─ jobs/            nightly archive-orders and purge-events, run-job CLI
-├─ api/test/           Vitest + Supertest (deliberately partial)
-├─ web/src/            pages/, components/, api/client.ts, lib/, hooks/, __tests__/
-├─ db/migrations/      001…006 SQL, applied in file-name order
-├─ db/seed/            deterministic seed generator (fixed random seed) and loader
-├─ db/testing/         throwaway PostgreSQL 16 harness shared by all test suites
-├─ docs/REQUIREMENTS.md product requirements as the team keeps them
-├─ tickets/ABC-*.md    planned change tickets (ticket-snapshot.v1)
-├─ fixtures/logs/      canned deployment log (deployment-failure-analysis input)
-├─ .github/workflows/ci.yml  review target for pipeline-review; never run by this repo
-├─ companion-example/  tsl.yaml and context/ skeleton for this system (SDD-12, SDD-06)
-└─ .answers/           answer key and defect canaries: NEVER part of any context pack
+```
+api/   Express API. routes -> services -> repositories
+  src/auth/identity.ts   identity + permissions; sign-in plugs in here later (PRD §4.6)
+  src/lib/               time zone, slots, validation, error helpers
+  test/                  API tests, named by PRD requirement ID (DOC-1, APT-4, ...)
+web/   React web app (pages, components, API client)
+db/    SQL migrations, migration runner, synthetic seed, throwaway PostgreSQL test harness
+  migrations/            one file per change: YYYYMMDDTHHMMSS__what.sql (UTC timestamp)
+render.yaml              the shared test environment on Render
 ```
 
-API (TST-01 §4.2): `GET /api/health`, `GET /api/orders?customerId&from&to&sort&page`,
-`GET /api/orders/:id`, `POST /api/orders`, `PATCH /api/orders/:id/status`,
-`GET /api/customers/:id`, `GET /api/products`. Errors are `{"error": {"code", "message"}}`.
+## How the team works
 
-UI routes: `/orders` (order history), `/orders/:id`, `/orders/new`, `/customers/:id`, `/products`.
+```
+engineers --AI Skill Library runs--> tsl/<ticket> branches --draft PRs--> main
+                                                                   | auto-deploy: migrate, seed if empty, start
+own Neon database branch (dev) <-- reset from main --+             v
+                                                     +-- Neon "hms" main <-- Render "hms-test" (shared URL)
+```
 
-Tables: `customer`, `product`, `orders`, `order_item`, `order_status_history`, `shipment`,
-`order_events`.
+1. **One ticket per person.** Start a workflow from the companion repo
+   (`/truminds:run brownfield-change <ticket> <ticket-file>`). Two people on one ticket block each other.
+2. **Changes arrive as pull requests.** A reviewer merges into `main`. Merging is the only way code reaches the
+   shared environment.
+3. **The shared environment** redeploys after every merge. Everyone tests the integrated result at the same URL.
+4. **Your own database.** Each engineer has a Neon database branch for local runs. Break it freely and reset it
+   from `main` in the Neon console when you want fresh data. Never point local runs at the `main` branch.
+5. **Migrations** are new files only, never edits to merged ones. Name them with the current UTC time,
+   e.g. `db/migrations/20261020T143000__add_lab_results.sql`, so parallel work never collides. Every deploy applies
+   the new ones in name order.
+6. **Every requirement has a test that names its ID** (PRD NFR-4). New requirements get new IDs and tests.
 
 ## Run locally
 
-With Docker (db on 5433, api on 3000, web on 5174, all bound to 127.0.0.1):
+Needs Node.js 22. Create `.env` from [.env.example](.env.example) with your own Neon branch's connection string
+(direct, not "-pooler"), then in PowerShell:
 
-```bash
-mkdir -p ~/.truminds-dev && openssl rand -hex 24 > ~/.truminds-dev/sample_pg_password
-docker compose up --build
-# open http://127.0.0.1:5174
-```
-
-The `migrate` service applies migrations and seeds with `SEED_ANCHOR=now`, so the last-7-days
-view has data. The password lives only in that local file (a Docker secret); nothing secret
-is committed. Data at rest sits in the `pgdata` volume on the laptop's encrypted disk.
-
-Without Docker (Node 22, a PostgreSQL 16 you run yourself):
-
-```bash
+```powershell
 npm ci
-export DATABASE_URL=postgres://order_tracker@127.0.0.1:5433/order_tracker
-export PGPASSWORD_FILE=~/.truminds-dev/sample_pg_password
-npm run db:migrate && npm run db:seed      # SEED_ANCHOR=now for demo data near today
-npm run dev -w api                         # API on 127.0.0.1:3000
-npm run dev -w web                         # web on 127.0.0.1:5174, proxies /api
-npm run build -w api && npm run job -w api -- purge-events   # nightly jobs
+Get-Content .env | ForEach-Object { if ($_ -match '^([A-Z_]+)=(.*)$') { Set-Item "env:$($Matches[1])" $Matches[2] } }
+npm run db:migrate            # apply new migrations to your branch
+npm run db:seed               # seeds only an empty database; `npm run db:seed -- --reset` wipes YOUR branch first
+npm run dev -w api            # API on http://127.0.0.1:3000
+npm run dev -w web            # web app on http://127.0.0.1:5174 (proxies /api to the API), in a second window
 ```
-
-`.env.example` lists every setting with placeholders only.
 
 ## Test
 
-```bash
-npm ci
-npm test            # db, api and web suites
-npm run lint        # eslint (flat config)
-npm run typecheck   # tsc --noEmit, strict
-npm run canary      # defect canaries in .answers/ (answer-key holders only)
+```powershell
+npm run lint; npm run typecheck; npm test
 ```
 
-The API and db suites start a **throwaway PostgreSQL 16** from `/usr/lib/postgresql/16/bin`
-(override with `PG_BIN`) in a temp directory on a free loopback port, migrate a template
-database once, and give each test file its own copy. When run as root they use the
-`postgres` OS account, because `initdb` refuses root. To use an existing server instead, set
-`SAMPLE_TEST_DATABASE_URL` to an admin database URL. With neither, the database tests skip
-with a message. No test touches the network; Docker is not needed for tests.
+Database tests start a throwaway PostgreSQL 16 from local binaries (`PG_BIN`, default
+`/usr/lib/postgresql/16/bin`) or use `HMS_TEST_DATABASE_URL` (an admin URL of a local server). Without either they
+are skipped with a warning, so on a laptop without PostgreSQL only the non-database tests run. Tests never touch
+Neon. CI (`.github/workflows/ci.yml`) runs everything against a PostgreSQL 16 service on every pull request.
 
-Determinism: `TZ=UTC` is pinned in every Vitest config, and the seed uses a fixed random
-seed and a fixed anchor timestamp, so the same seed gives the same rows (TC-SAM-002).
+## Shared test environment
 
-## Seeded defects
+Defined in [render.yaml](render.yaml): one free Render web service (`hms-test`) built from `main`, serving the API
+and the web app from the same origin, with `DATABASE_URL` set to the `main` branch of the Neon project `hms`.
+On each deploy it runs `npm run db:migrate`, then `npm run db:seed` (which does nothing once data exists), then
+starts. The free service sleeps when idle; the first request after a pause takes up to a minute.
 
-Order Tracker carries seeded defects on purpose (TST-01 §4.3). This README does not describe
-them, because skills read this repository and must find the defects themselves.
+The URL is open to anyone who has it until sign-in is added (PRD AUTH-5). It holds invented data only.
 
-**Why the tests pass with the defects in place.** The defects are logical, not build or test
-failures. TST-01 §4.2 asks for a deliberately partial suite (about 40% line coverage), so the
-tests that would catch each defect are **intentionally missing**. Writing such tests is what
-`unit-test`, `test-plan` and `defect-fix` runs are expected to do. Proof that each defect is
-still present lives in the defect canaries (`npm run canary`, TC-SAM-003), outside the normal
-suites. Do not "fix" a defect in passing; a deliberate change updates the answer key and its
-canary in the same pull request.
+## API
 
-**`.answers/` is never part of any context pack.** It holds the answer key and the canaries.
-It must never be read by a skill, copied into an eval workspace, extracted by
-`tsl context build`, cited in a context section or given to Claude in a run. Eval runners copy
-the sample system without `.answers/`.
-
-## Change tickets
-
-`tickets/ABC-*.md` are invented tickets in the `ticket-snapshot.v1` shape the skills read
-(front matter plus markdown body, `source: file`; the `run_id` is a fixed placeholder that the
-run loop replaces). They follow TST-01 §4.4: ABC-142, ABC-150, ABC-158, ABC-163, ABC-170,
-ABC-171, ABC-175, ABC-180. No Jira is touched.
-
-## Companion example
-
-`companion-example/` is a skeleton companion repo for this system: `tsl.yaml` (validates with
-`uv run --project ../../tsl tsl validate examples/sample-system/companion-example/tsl.yaml`
-from the repo root), `CODEOWNERS`, `.gitignore`, `.gitattributes` and `context/` with the seven
-judgement sections in `context-section.v1` form, status `drafted`. `context/generated/`,
-`manifest.json` and `pack.signature.json` are written only by `tsl context build` and
-`tsl context sign`, so they are not committed here. See `companion-example/README.md`.
-
-## Traceability
-
-| Spec section | Implemented in |
-| --- | --- |
-| TST-01 §4.1 purpose; ADR 0004 stack | This folder; `package.json` workspaces |
-| TST-01 §4.2 front end (React + Vite + TS) | `web/` |
-| TST-01 §4.2 back end (Express) | `api/src/app.ts`, `api/src/routes/`, `api/src/services/`, `api/src/repositories/` |
-| TST-01 §4.2 database, migrations, seed | `db/migrations/001…006`, `db/seed/generate.ts`, `db/seed/load.ts` |
-| TST-01 §4.2 run on loopback | `docker-compose.yml`, `Dockerfile`, `api/src/config.ts` |
-| TST-01 §4.2 data volumes (200 / 50 / ~5,000 over 30 months) | `db/seed/generate.ts` |
-| TST-01 §4.2 API table | `api/src/routes/*.ts` |
-| TST-01 §4.2 brownfield quirks (SHIPPD, cents, 24-month archive, duplicated totals) | `api/src/lib/status.ts`, `api/src/lib/price.ts`, `web/src/lib/price.ts`, `api/src/jobs/archive-orders.ts` |
-| TST-01 §4.3 seeded defects and answer key | `.answers/` |
-| TST-01 §4.3 defect canaries (TC-SAM-003) | `.answers/canary/` |
-| TST-01 §4.4 planned change tickets | `tickets/` |
-| TST-01 §4.5 layout (`fixtures/logs/`, `.github/workflows/ci.yml`) | `fixtures/logs/deploy-failure-01.log`, `.github/workflows/ci.yml` |
-| TST-01 §5 TC-SAM-001 (builds, migrates, seeds, serves health) | `db/test/seed.test.ts`, `api/test/health.test.ts` |
-| TST-01 §5 TC-SAM-002 (deterministic seed) | `db/test/seed.test.ts` |
-| SDD-06 §10 worked example (`order_events`, purge job) | `db/migrations/004_add_order_events.sql`, `api/src/jobs/purge-events.ts`, `companion-example/context/data-model.md#data-retention` |
-| SDD-06 §3 pack layout; SDD-12 §3.1, §4.1 companion layout and `tsl.yaml` | `companion-example/` |
-| Doc 4 §3 worked example ticket | `tickets/ABC-142.md` |
-
-## Deviations from the written spec
-
-- **TypeScript API on Node 22.** TST-01 §4.2 says JavaScript (CommonJS) on Node 20 and cites
-  `.js` paths; DEV-01 says Node 20. This build follows the task brief (Node 22, TypeScript
-  compiled to CommonJS). Paths in TST-01 §3.1 and SDD-06 §10 read `.ts` here.
-- **Answer key location.** TST-01 §4.3 puts it outside the system in
-  `examples/sample-system-key/`. The task brief puts it in `.answers/` inside; the README rule
-  above and the eval runner must exclude it.
-- **Migrations path.** SDD-06 §7.2 and §10 use `api/migrations/`; TST-01 §4.5 uses
-  `db/migrations/`, which this build follows. The companion `critical_paths` use `db/migrations/**`.
-- **Jobs path.** TST-01 names `api/jobs/archive-orders.js`; SDD-06 names
-  `api/src/jobs/purge-events.js`. Both jobs live in `api/src/jobs/`.
-- **Tables.** TST-01 lists 6 tables; SDD-06's example adds `order_events`. Both are here (7).
+JSON under `/api`; see PRD §6. Lists return `{ items, page, page_size, total }`. Errors return
+`{ error: { code, message, fields? } }`: `400` invalid input (one message per field), `404` unknown id,
+`409` conflict (slot taken, appointment closed, record in use). `GET /api/health` reports database status;
+`GET /api/settings` gives the hospital time zone and currency.

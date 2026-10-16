@@ -7,7 +7,7 @@ import { Client } from 'pg';
 
 /**
  * Throwaway PostgreSQL 16 for tests. Either:
- *  - SAMPLE_TEST_DATABASE_URL points at an existing server (admin database URL), or
+ *  - HMS_TEST_DATABASE_URL points at an existing server (admin database URL), or
  *  - the PostgreSQL 16 binaries (PG_BIN, default /usr/lib/postgresql/16/bin) start a
  *    temporary cluster in a temp directory, on loopback, removed afterwards.
  * Returns null when neither is available; tests then skip with a clear message.
@@ -38,7 +38,7 @@ export function dbUrl(adminUrl: string, database: string): string {
 }
 
 export async function startPg(): Promise<PgServer | null> {
-  const external = process.env.SAMPLE_TEST_DATABASE_URL;
+  const external = process.env.HMS_TEST_DATABASE_URL;
   if (external) return { adminUrl: external, stop: async () => undefined };
   if (!existsSync(path.join(PG_BIN, 'initdb'))) return null;
 
@@ -50,8 +50,8 @@ export async function startPg(): Promise<PgServer | null> {
     else execFileSync(cmd, args, { stdio: 'ignore' });
   };
 
-  const base = process.env.SAMPLE_PG_TMP ?? (asRoot ? '/tmp' : os.tmpdir());
-  const dir = mkdtempSync(path.join(base, 'order-tracker-pg-'));
+  const base = process.env.HMS_PG_TMP ?? (asRoot ? '/tmp' : os.tmpdir());
+  const dir = mkdtempSync(path.join(base, 'hms-pg-'));
   if (asRoot) {
     const uid = Number(execFileSync('id', ['-u', 'postgres']).toString().trim());
     const gid = Number(execFileSync('id', ['-g', 'postgres']).toString().trim());
@@ -59,14 +59,14 @@ export async function startPg(): Promise<PgServer | null> {
   }
   const data = path.join(dir, 'data');
   const port = await freePort();
-  run('initdb', ['-D', data, '-U', 'order_tracker', '-A', 'trust', '-E', 'UTF8', '--locale=C', '--no-sync']);
+  run('initdb', ['-D', data, '-U', 'hms', '-A', 'trust', '-E', 'UTF8', '--locale=C', '--no-sync']);
   run('pg_ctl', [
     '-D', data, '-l', path.join(dir, 'server.log'), '-w', '-o',
     `-p ${port} -k ${dir} -c listen_addresses=127.0.0.1 -c fsync=off -c full_page_writes=off -c timezone=UTC`,
     'start',
   ]);
   return {
-    adminUrl: `postgres://order_tracker@127.0.0.1:${port}/postgres`,
+    adminUrl: `postgres://hms@127.0.0.1:${port}/postgres`,
     stop: async () => {
       try {
         run('pg_ctl', ['-D', data, '-m', 'immediate', '-w', 'stop']);

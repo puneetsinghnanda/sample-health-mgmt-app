@@ -1,8 +1,8 @@
 {
-  "name": "@order-tracker/web",
-  "version": "1.4.2",
+  "name": "@hms/web",
+  "version": "0.1.0",
   "private": true,
-  "description": "Order Tracker web app (React 18 + Vite).",
+  "description": "Hospital Management web app (React 18 + Vite).",
   "scripts": {
     "dev": "vite",
     "build": "tsc -p tsconfig.json && vite build",

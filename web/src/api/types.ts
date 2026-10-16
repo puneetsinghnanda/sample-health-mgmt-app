@@ -1,59 +1,116 @@
-export type OrderStatus = 'PLACED' | 'PACKED' | 'SHIPPED' | 'SHIPPD' | 'DELIVERED';
+// Mirrors api/src/types.ts (the API's response shapes).
+export type RecordStatus = 'ACTIVE' | 'INACTIVE';
+export type AppointmentStatus = 'SCHEDULED' | 'COMPLETED' | 'CANCELLED' | 'NO_SHOW';
 
-export interface OrderItem {
-  productId: number;
-  sku: string;
-  name: string;
-  quantity: number;
-  unitPriceCents: number;
-}
-
-export interface OrderSummary {
-  id: number;
-  customerId: number;
-  customerName: string;
-  status: OrderStatus;
-  totalCents: number;
-  createdAt: string;
-  items: OrderItem[];
-}
-
-export interface OrderDetail extends OrderSummary {
-  statusHistory: { fromStatus: OrderStatus | null; toStatus: OrderStatus; changedAt: string }[];
-  events: { id: number; status: OrderStatus; createdAt: string }[];
-  shipment: { carrierCode: string; shippedAt: string } | null;
-}
-
-export interface OrderListResponse {
-  orders: OrderSummary[];
-  total: number;
+export interface Page<T> {
+  items: T[];
   page: number;
+  page_size: number;
+  total: number;
+}
+
+export interface Settings {
+  timeZone: string;
+  currency: string;
   pageSize: number;
-  from: string;
-  to: string;
 }
 
-export interface OrderQuery {
-  from?: string;
-  to?: string;
-  customerId?: string;
-  sort?: string;
-  page?: number;
+export interface RefEntry {
+  id: number;
+  name: string;
+  status: RecordStatus;
+  doctorCount: number;
 }
 
-export interface CustomerSummary {
+export interface AvailabilityBlock {
+  weekday: number;
+  start: string;
+  end: string;
+}
+
+export interface DoctorSummary {
   id: number;
   code: string;
-  displayName: string;
-  email: string;
-  orderCount: number;
-  totalSpentCents: number;
-  lastOrderAt: string | null;
+  fullName: string;
+  specialization: { id: number; name: string; status: RecordStatus };
+  department: { id: number; name: string; status: RecordStatus };
+  phone: string;
+  email: string | null;
+  feePaise: number;
+  slotMinutes: number;
+  status: RecordStatus;
 }
 
-export interface Product {
+export interface AppointmentSummary {
   id: number;
-  sku: string;
-  name: string;
-  priceCents: number;
+  code: string;
+  doctor: { id: number; code: string; fullName: string };
+  patient: { id: number; code: string; fullName: string };
+  startsAt: string;
+  endsAt: string;
+  status: AppointmentStatus;
+}
+
+export interface DoctorDetail extends DoctorSummary {
+  availability: AvailabilityBlock[];
+  upcoming: AppointmentSummary[];
+  outsideAvailability: number[];
+  appointmentCount: number;
+}
+
+export interface PatientSummary {
+  id: number;
+  code: string;
+  fullName: string;
+  dateOfBirth: string;
+  age: number;
+  gender: string;
+  phone: string;
+  status: RecordStatus;
+  registeredAt: string;
+}
+
+export interface PatientDetail extends PatientSummary {
+  email: string | null;
+  address: string | null;
+  emergencyContact: { name: string | null; phone: string | null };
+  medicalHistory: {
+    bloodGroup: string | null;
+    allergies: string[];
+    chronicConditions: string[];
+    currentMedications: string[];
+    notes: string | null;
+  };
+  appointments: AppointmentSummary[];
+}
+
+export interface AppointmentDetail extends AppointmentSummary {
+  reason: string | null;
+  cancellationReason: string | null;
+  history: Array<{ event: string; fromStartsAt: string | null; toStartsAt: string | null; note: string | null; actor: string; at: string }>;
+}
+
+export interface Slot {
+  start: string;
+  end: string;
+  label: string;
+  state: 'FREE' | 'BOOKED' | 'PAST';
+  appointment?: AppointmentSummary;
+}
+
+export interface DaySchedule {
+  doctorId: number;
+  date: string;
+  slotMinutes: number;
+  slots: Slot[];
+  appointments: AppointmentSummary[];
+}
+
+export type Period = 'today' | '7d' | '30d';
+
+export interface Dashboard {
+  today: string;
+  period: { name: Period; from: string; to: string };
+  totals: { patients: number; doctors: number; appointmentsToday: number; upcoming: number; completed: number; cancelled: number };
+  next: AppointmentSummary[];
 }

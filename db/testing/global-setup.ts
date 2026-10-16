@@ -8,12 +8,12 @@ import { adminQuery, dbUrl, startPg } from './pg-harness';
 export default async function setup({ provide }: GlobalSetupContext): Promise<() => Promise<void>> {
   const server = await startPg();
   if (!server) {
-    console.warn('[order-tracker] No PostgreSQL 16 found: database tests are skipped. Set PG_BIN or SAMPLE_TEST_DATABASE_URL.');
+    console.warn('[hms] No PostgreSQL 16 found: database tests are skipped. Set PG_BIN or HMS_TEST_DATABASE_URL.');
     provide('pgAdminUrl', '');
     provide('pgTemplateDb', '');
     return async () => undefined;
   }
-  const template = `order_tracker_tpl_${process.pid}`;
+  const template = `hms_tpl_${process.pid}`;
   await adminQuery(server.adminUrl, `CREATE DATABASE ${template}`);
   const pool = new Pool({ connectionString: dbUrl(server.adminUrl, template) });
   try {

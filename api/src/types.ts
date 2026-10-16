@@ -1,86 +1,102 @@
-import type { OrderStatus } from './lib/status';
+export type RecordStatus = 'ACTIVE' | 'INACTIVE';
+export const RECORD_STATUSES: readonly RecordStatus[] = ['ACTIVE', 'INACTIVE'];
 
-export interface OrderItem {
-  productId: number;
-  sku: string;
-  name: string;
-  quantity: number;
-  unitPriceCents: number;
-}
+export type AppointmentStatus = 'SCHEDULED' | 'COMPLETED' | 'CANCELLED' | 'NO_SHOW';
+export const APPOINTMENT_STATUSES: readonly AppointmentStatus[] = ['SCHEDULED', 'COMPLETED', 'CANCELLED', 'NO_SHOW'];
 
-export interface OrderSummary {
-  id: number;
-  customerId: number;
-  customerName: string;
-  status: OrderStatus;
-  totalCents: number;
-  createdAt: string;
-  items: OrderItem[];
-}
+export const GENDERS = ['FEMALE', 'MALE', 'OTHER', 'UNDISCLOSED'] as const;
+export const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-', 'UNKNOWN'] as const;
+export const SLOT_MINUTES = [10, 15, 20, 30, 45, 60] as const;
 
-export interface StatusChange {
-  fromStatus: OrderStatus | null;
-  toStatus: OrderStatus;
-  changedAt: string;
-}
-
-export interface OrderEvent {
-  id: number;
-  status: OrderStatus;
-  createdAt: string;
-}
-
-export interface Shipment {
-  carrierCode: string;
-  shippedAt: string;
-}
-
-export interface OrderDetail extends OrderSummary {
-  statusHistory: StatusChange[];
-  events: OrderEvent[];
-  shipment: Shipment | null;
-}
-
-export interface OrderListFilter {
-  from: Date;
-  to: Date;
-  customerId?: number;
-  sort?: string;
+/** PRD §6: every list answers with this envelope. */
+export interface Page<T> {
+  items: T[];
   page: number;
-  pageSize: number;
-}
-
-export interface OrderPage {
-  orders: OrderSummary[];
+  page_size: number;
   total: number;
 }
 
-export interface NewOrderLine {
-  productId: number;
-  quantity: number;
+export interface RefEntry {
+  id: number;
+  name: string;
+  status: RecordStatus;
+  doctorCount: number;
 }
 
-export interface NewOrder {
-  customerId: number;
-  items: NewOrderLine[];
+export interface AvailabilityBlock {
+  weekday: number;
+  start: string;
+  end: string;
 }
 
-export interface Customer {
+export interface DoctorSummary {
   id: number;
   code: string;
-  displayName: string;
-  email: string;
+  fullName: string;
+  specialization: { id: number; name: string; status: RecordStatus };
+  department: { id: number; name: string; status: RecordStatus };
+  phone: string;
+  email: string | null;
+  feePaise: number;
+  slotMinutes: number;
+  status: RecordStatus;
 }
 
-export interface CustomerSummary extends Customer {
-  orderCount: number;
-  totalSpentCents: number;
-  lastOrderAt: string | null;
-}
-
-export interface Product {
+export interface AppointmentSummary {
   id: number;
-  sku: string;
-  name: string;
-  priceCents: number;
+  code: string;
+  doctor: { id: number; code: string; fullName: string };
+  patient: { id: number; code: string; fullName: string };
+  startsAt: string;
+  endsAt: string;
+  status: AppointmentStatus;
+}
+
+export interface DoctorDetail extends DoctorSummary {
+  availability: AvailabilityBlock[];
+  upcoming: AppointmentSummary[];
+  /** DOC-7: Scheduled appointments that no longer fit the weekly availability. */
+  outsideAvailability: number[];
+  appointmentCount: number;
+}
+
+export interface PatientSummary {
+  id: number;
+  code: string;
+  fullName: string;
+  dateOfBirth: string;
+  age: number;
+  gender: string;
+  phone: string;
+  status: RecordStatus;
+  registeredAt: string;
+}
+
+export interface PatientDetail extends PatientSummary {
+  email: string | null;
+  address: string | null;
+  emergencyContact: { name: string | null; phone: string | null };
+  medicalHistory: {
+    bloodGroup: string | null;
+    allergies: string[];
+    chronicConditions: string[];
+    currentMedications: string[];
+    notes: string | null;
+  };
+  appointments: AppointmentSummary[];
+}
+
+export interface AppointmentEvent {
+  event: string;
+  fromStartsAt: string | null;
+  toStartsAt: string | null;
+  note: string | null;
+  actor: string;
+  at: string;
+}
+
+export interface AppointmentDetail extends AppointmentSummary {
+  reason: string | null;
+  cancellationReason: string | null;
+  history: AppointmentEvent[];
 }

@@ -1,14 +1,13 @@
 {
-  "name": "@order-tracker/api",
-  "version": "1.4.2",
+  "name": "@hms/api",
+  "version": "0.1.0",
   "private": true,
-  "description": "Order Tracker HTTP API (Express). Layers: routes -> services -> repositories.",
+  "description": "Hospital Management HTTP API (Express). Layers: routes -> services -> repositories.",
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/server.js",
-    "job": "node dist/jobs/run-job.js",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run"
   },

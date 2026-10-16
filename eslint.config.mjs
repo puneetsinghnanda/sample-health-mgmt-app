@@ -4,11 +4,11 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['**/dist/**', '**/node_modules/**', '**/coverage/**', 'companion-example/**'] },
+  { ignores: ['**/dist/**', '**/node_modules/**', '**/coverage/**'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    files: ['api/**/*.ts', 'db/**/*.ts', '.answers/**/*.ts'],
+    files: ['api/**/*.ts', 'db/**/*.ts'],
     languageOptions: { globals: globals.node },
   },
   {

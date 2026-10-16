@@ -1,0 +1,27 @@
+# Shared test environment for the Hospital Management MVP (docs/PRD.md §8).
+# One free web service serves the API and the web app from the same origin. Every deploy of `main`:
+# installs, builds, applies new migrations, seeds only an empty database, then starts.
+# The database is the `main` branch of the dedicated Neon project "hms" (direct connection, not "-pooler").
+services:
+  - type: web
+    name: hms-test
+    runtime: node
+    plan: free
+    region: singapore
+    branch: main
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm run db:migrate && npm run db:seed && npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL
+        sync: false # paste the Neon connection string in the Render dashboard; never in git
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: API_HOST
+        value: 0.0.0.0
+      - key: HOSPITAL_TZ
+        value: Asia/Kolkata
+      - key: WEB_DIST_DIR
+        value: web/dist

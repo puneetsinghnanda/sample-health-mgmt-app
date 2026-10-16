@@ -1,45 +1,57 @@
 import { createHash } from 'node:crypto';
-import { orderTotalCents } from '../../api/src/lib/price';
+import { addDays, isoWeekday, localDay, MINUTE, zonedToUtc } from '../../api/src/lib/time';
 
 /**
- * Deterministic seed data for Order Tracker. Everything here is invented:
- * customers are "Test Customer NNN" with custNNN@example.test emails.
- * Same seed and anchor give the same rows (TC-SAM-002).
+ * Deterministic, invented seed data for the Hospital Management System (PRD NFR-7).
+ * Names are made up from short lists, emails use example.com, and phone numbers come from an
+ * unassigned "+91 00000" range, so nothing here can belong to a real person.
  */
 
-export const DEFAULT_SEED = 20240611;
-export const DEFAULT_ANCHOR = '2026-09-30T12:00:00Z';
+export const DEFAULT_SEED = 20261016;
+export const DEFAULT_TZ = 'Asia/Kolkata';
 
-export interface SeedCustomer { id: number; code: string; displayName: string; email: string }
-export interface SeedProduct { id: number; sku: string; name: string; priceCents: number }
-export interface SeedItem { productId: number; quantity: number; unitPriceCents: number }
-export interface SeedStatusChange { fromStatus: string | null; toStatus: string; changedAt: string }
-export interface SeedOrder {
-  id: number;
-  customerId: number;
-  status: string;
-  totalCents: number;
-  createdAt: string;
-  archivedAt: string | null;
-  items: SeedItem[];
-  history: SeedStatusChange[];
-  shipment: { carrierCode: string; shippedAt: string } | null;
+export interface SeedRef { id: number; name: string }
+export interface SeedBlock { weekday: number; start: string; end: string }
+export interface SeedDoctor {
+  id: number; fullName: string; specializationId: number; departmentId: number; phone: string; email: string;
+  feePaise: number; slotMinutes: number; availability: SeedBlock[];
 }
-export interface SeedEvent { orderId: number; status: string; createdAt: string }
+export interface SeedPatient {
+  id: number; fullName: string; dateOfBirth: string; gender: string; phone: string; email: string;
+  bloodGroup: string; allergies: string[]; chronicConditions: string[]; currentMedications: string[];
+}
+export interface SeedAppointment {
+  id: number; doctorId: number; patientId: number; startsAt: string; endsAt: string; reason: string;
+  status: 'SCHEDULED' | 'COMPLETED' | 'CANCELLED' | 'NO_SHOW'; cancellationReason: string | null; bookedAt: string;
+}
 export interface SeedData {
-  customers: SeedCustomer[];
-  products: SeedProduct[];
-  orders: SeedOrder[];
-  events: SeedEvent[];
+  departments: SeedRef[];
+  specializations: SeedRef[];
+  doctors: SeedDoctor[];
+  patients: SeedPatient[];
+  appointments: SeedAppointment[];
 }
 
-const ADJECTIVES = ['Blue', 'Compact', 'Classic', 'Large', 'Small', 'Recycled', 'Steel', 'Bamboo', 'Canvas', 'Glass'];
-const NOUNS = ['Notebook', 'Water Bottle', 'Desk Lamp', 'Backpack', 'Mug'];
-const CARRIERS = ['CARRIER-A', 'CARRIER-B', 'CARRIER-C'];
-const HOUR = 3_600_000;
-const DAY = 24 * HOUR;
-const MONTHS_OF_ORDERS = 30;
-const ORDER_COUNT = 5000;
+const DEPARTMENTS = ['Outpatient', 'Emergency', 'Surgery', 'Paediatrics', 'Diagnostics'];
+const SPECIALIZATIONS = [
+  'General Medicine', 'Cardiology', 'Dermatology', 'Orthopaedics', 'Paediatrics', 'ENT', 'Neurology', 'Gynaecology',
+];
+const FIRST = ['Aarav', 'Diya', 'Kabir', 'Meera', 'Rohan', 'Isha', 'Vivaan', 'Anaya', 'Arjun', 'Kiara', 'Dev', 'Tara',
+  'Neel', 'Riya', 'Yash', 'Sara', 'Om', 'Zoya', 'Veer', 'Pia'];
+const LAST = ['Testwal', 'Demorao', 'Samplekar', 'Mockerjee', 'Fictiva', 'Placeholdar', 'Inventa', 'Dummysen'];
+const ALLERGIES = ['Penicillin', 'Peanuts', 'Dust', 'Latex', 'Sulfa drugs'];
+const CONDITIONS = ['Hypertension', 'Type 2 diabetes', 'Asthma', 'Hypothyroidism', 'Migraine'];
+const MEDICATIONS = ['Metformin 500 mg', 'Amlodipine 5 mg', 'Salbutamol inhaler', 'Levothyroxine 50 mcg'];
+const REASONS = ['Follow-up visit', 'Fever and cough', 'Routine check-up', 'Back pain', 'Skin rash', 'Headache',
+  'Blood pressure review', 'Vaccination'];
+const CANCEL_REASONS = ['Patient requested', 'Doctor unavailable', 'Rescheduled by phone'];
+const GENDERS = ['FEMALE', 'MALE', 'OTHER', 'UNDISCLOSED'];
+const BLOOD = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-', 'UNKNOWN'];
+const SLOTS = [15, 15, 20, 30];
+const DOCTOR_COUNT = 12;
+const PATIENT_COUNT = 200;
+const DAYS_BACK = 21;
+const DAYS_AHEAD = 14;
 
 /** mulberry32: small, fast, deterministic PRNG. */
 function rng(seed: number): () => number {
@@ -53,108 +65,112 @@ function rng(seed: number): () => number {
   };
 }
 
-/** UTC wall-clock text for a `timestamp` column: "YYYY-MM-DD HH:MM:SS". */
-export function dbTimestamp(ms: number): string {
-  return new Date(ms).toISOString().slice(0, 19).replace('T', ' ');
-}
-
-function pad(n: number, width: number): string {
-  return String(n).padStart(width, '0');
-}
-
-export function resolveAnchor(value: string | undefined): number {
-  if (!value) return Date.parse(DEFAULT_ANCHOR);
-  if (value === 'now') return Date.now();
+/** SEED_ANCHOR: "now" (default for the shared environment) or a fixed ISO instant (tests, demos). */
+export function resolveAnchor(value: string | undefined, now: Date = new Date()): Date {
+  if (value === undefined || value === '' || value === 'now') return now;
   const ms = Date.parse(value);
-  if (Number.isNaN(ms)) throw new Error(`SEED_ANCHOR is not a valid timestamp: ${value}`);
-  return ms;
+  if (Number.isNaN(ms)) throw new Error('SEED_ANCHOR must be "now" or an ISO 8601 timestamp');
+  return new Date(ms);
 }
 
-export function generateSeed(seed: number = DEFAULT_SEED, anchorMs: number = Date.parse(DEFAULT_ANCHOR)): SeedData {
-  const rand = rng(seed);
-  const int = (min: number, max: number): number => min + Math.floor(rand() * (max - min + 1));
-  const pick = <T>(list: readonly T[]): T => list[Math.floor(rand() * list.length)] as T;
+function phone(n: number): string {
+  return `+91 00000 ${String(n).padStart(5, '0')}`;
+}
 
-  const customers: SeedCustomer[] = [];
-  for (let i = 1; i <= 200; i++) {
-    customers.push({
-      id: i,
-      code: `CUST-${pad(i, 3)}`,
-      displayName: `Test Customer ${pad(i, 3)}`,
-      email: `cust${pad(i, 3)}@example.test`,
-    });
-  }
+export function generateSeed(seed: number = DEFAULT_SEED, anchor: Date = new Date('2026-10-16T06:30:00Z'),
+  tz: string = DEFAULT_TZ): SeedData {
+  const r = rng(seed);
+  const pick = <T>(xs: readonly T[]): T => xs[Math.floor(r() * xs.length)] as T;
+  const some = <T>(xs: readonly T[], p: number): T[] => xs.filter(() => r() < p);
 
-  const products: SeedProduct[] = [];
-  for (let i = 1; i <= 50; i++) {
-    const adjective = ADJECTIVES[(i - 1) % ADJECTIVES.length] as string;
-    const noun = NOUNS[Math.floor((i - 1) / ADJECTIVES.length)] as string;
-    products.push({ id: i, sku: `SKU-${pad(i, 4)}`, name: `${adjective} ${noun}`, priceCents: int(199, 9999) });
-  }
+  const departments = DEPARTMENTS.map((name, i) => ({ id: i + 1, name }));
+  const specializations = SPECIALIZATIONS.map((name, i) => ({ id: i + 1, name }));
 
-  const span = MONTHS_OF_ORDERS * 30 * DAY;
-  const createdTimes: number[] = [];
-  for (let i = 0; i < ORDER_COUNT; i++) createdTimes.push(anchorMs - Math.floor(rand() * span));
-  createdTimes.sort((a, b) => a - b);
-
-  const orders: SeedOrder[] = [];
-  const events: SeedEvent[] = [];
-  const archiveCutoff = anchorMs - 24 * 30 * DAY;
-
-  createdTimes.forEach((created, index) => {
-    const id = index + 1;
-    const customer = pick(customers);
-    const lineCount = int(1, 4);
-    const used = new Set<number>();
-    const items: SeedItem[] = [];
-    while (items.length < lineCount) {
-      const product = pick(products);
-      if (used.has(product.id)) continue;
-      used.add(product.id);
-      items.push({ productId: product.id, quantity: int(1, 5), unitPriceCents: product.priceCents });
+  const doctors: SeedDoctor[] = [];
+  for (let i = 1; i <= DOCTOR_COUNT; i++) {
+    const morning = { start: '09:00', end: '13:00' };
+    const afternoon = { start: '14:00', end: '17:00' };
+    const availability: SeedBlock[] = [];
+    for (let wd = 1; wd <= 5; wd++) {
+      availability.push({ weekday: wd, ...morning });
+      if ((i + wd) % 2 === 0) availability.push({ weekday: wd, ...afternoon });
     }
-
-    const age = anchorMs - created;
-    const path: string[] = ['PLACED'];
-    if (age > 2 * HOUR) path.push('PACKED');
-    if (age > DAY) path.push('SHIPPED');
-    if (age > 4 * DAY) path.push('DELIVERED');
-    // Orders older than 18 months came from the old export, which wrote SHIPPD.
-    if (age > 18 * 30 * DAY && path.length === 4) path.splice(2, 2, 'SHIPPD');
-
-    const history: SeedStatusChange[] = [];
-    let at = created;
-    path.forEach((status, step) => {
-      if (step > 0) at += int(1, 20) * HOUR;
-      history.push({ fromStatus: step === 0 ? null : (path[step - 1] as string), toStatus: status, changedAt: dbTimestamp(Math.min(at, anchorMs)) });
+    if (i % 3 === 0) availability.push({ weekday: 6, start: '09:00', end: '12:00' });
+    doctors.push({
+      id: i,
+      fullName: `Dr. ${FIRST[(i * 7) % FIRST.length]} ${LAST[i % LAST.length]}`,
+      specializationId: ((i - 1) % SPECIALIZATIONS.length) + 1,
+      departmentId: ((i - 1) % DEPARTMENTS.length) + 1,
+      phone: phone(10_000 + i),
+      email: `doctor${String(i).padStart(2, '0')}@example.com`,
+      feePaise: (300 + Math.floor(r() * 10) * 100) * 100,
+      slotMinutes: pick(SLOTS),
+      availability,
     });
+  }
 
-    const shipped = history.find((h) => h.toStatus === 'SHIPPED' || h.toStatus === 'SHIPPD');
-    const status = path[path.length - 1] as string;
-    orders.push({
-      id,
-      customerId: customer.id,
-      status,
-      totalCents: orderTotalCents(items),
-      createdAt: dbTimestamp(created),
-      archivedAt: created < archiveCutoff ? dbTimestamp(anchorMs - DAY) : null,
-      items,
-      history,
-      shipment: shipped ? { carrierCode: pick(CARRIERS), shippedAt: shipped.changedAt } : null,
+  const anchorDay = localDay(anchor, tz);
+  const patients: SeedPatient[] = [];
+  for (let i = 1; i <= PATIENT_COUNT; i++) {
+    const age = 1 + Math.floor(r() * 85);
+    const dob = addDays(anchorDay, -(age * 365 + Math.floor(r() * 365)));
+    patients.push({
+      id: i,
+      fullName: `${pick(FIRST)} ${pick(LAST)}`,
+      dateOfBirth: dob,
+      gender: pick(GENDERS),
+      phone: phone(20_000 + i),
+      email: `patient${String(i).padStart(3, '0')}@example.com`,
+      bloodGroup: pick(BLOOD),
+      allergies: some(ALLERGIES, 0.1),
+      chronicConditions: some(CONDITIONS, 0.12),
+      currentMedications: some(MEDICATIONS, 0.1),
     });
+  }
 
-    // The activity feed only holds the last 24 hours (purge-events job).
-    for (const h of history) {
-      if (Date.parse(`${h.changedAt.replace(' ', 'T')}Z`) >= anchorMs - DAY) {
-        events.push({ orderId: id, status: h.toStatus, createdAt: h.changedAt });
+  // Appointments: a few per doctor per working day around the anchor, never overlapping for a doctor or a patient.
+  const appointments: SeedAppointment[] = [];
+  const busy = new Map<number, Array<[number, number]>>();
+  const patientFree = (pid: number, s: number, e: number): boolean =>
+    !(busy.get(pid) ?? []).some(([bs, be]) => s < be && bs < e);
+  for (let offset = -DAYS_BACK; offset <= DAYS_AHEAD; offset++) {
+    const day = addDays(anchorDay, offset);
+    const wd = isoWeekday(day);
+    for (const d of doctors) {
+      for (const block of d.availability.filter((b) => b.weekday === wd)) {
+        const [sh, sm] = block.start.split(':').map(Number) as [number, number];
+        const [eh, em] = block.end.split(':').map(Number) as [number, number];
+        for (let m = sh * 60 + sm; m + d.slotMinutes <= eh * 60 + em; m += d.slotMinutes) {
+          if (r() > 0.25) continue;
+          const start = zonedToUtc(day, m, tz).getTime();
+          const end = start + d.slotMinutes * MINUTE;
+          let pid = 1 + Math.floor(r() * PATIENT_COUNT);
+          for (let tries = 0; tries < 5 && !patientFree(pid, start, end); tries++) pid = 1 + Math.floor(r() * PATIENT_COUNT);
+          if (!patientFree(pid, start, end)) continue;
+          busy.set(pid, [...(busy.get(pid) ?? []), [start, end]]);
+          const past = end <= anchor.getTime();
+          const roll = r();
+          const status: SeedAppointment['status'] = past
+            ? roll < 0.8 ? 'COMPLETED' : roll < 0.92 ? 'CANCELLED' : 'NO_SHOW'
+            : start > anchor.getTime() ? (roll < 0.9 ? 'SCHEDULED' : 'CANCELLED') : 'SCHEDULED';
+          appointments.push({
+            id: appointments.length + 1,
+            doctorId: d.id,
+            patientId: pid,
+            startsAt: new Date(start).toISOString(),
+            endsAt: new Date(end).toISOString(),
+            reason: pick(REASONS),
+            status,
+            cancellationReason: status === 'CANCELLED' ? pick(CANCEL_REASONS) : null,
+            bookedAt: new Date(Math.min(start, anchor.getTime()) - (1 + Math.floor(r() * 10)) * 86_400_000).toISOString(),
+          });
+        }
       }
     }
-  });
-
-  return { customers, products, orders, events };
+  }
+  return { departments, specializations, doctors, patients, appointments };
 }
 
-/** SHA-256 over the canonical JSON of the generated rows; used by the determinism test. */
 export function seedHash(data: SeedData): string {
   return createHash('sha256').update(JSON.stringify(data)).digest('hex');
 }
