@@ -4,7 +4,7 @@
 | --- | --- |
 | Product | Hospital Management System (HMS), test product for the AI Skill Library |
 | Owner | Puneet Singh Nanda |
-| Status | Draft for review |
+| Status | Reviewed; open questions decided (§10) |
 | Data | Invented data only. No real patients, doctors or contact details, anywhere |
 
 ## 1. Purpose
@@ -30,7 +30,7 @@ SQL migrations, tests, and one shared environment where the merged result runs.
 
 **Non-goals for the MVP**
 
-- Sign-in, roles and permissions (the architecture is ready for them; see §8).
+- Sign-in, roles and permissions (the architecture is ready for them; see §4.6).
 - Billing and payments, prescriptions, lab results, wards and beds, inventory, insurance.
 - Notifications (SMS, email), patient self-service, telemedicine.
 - More than one hospital or branch.
@@ -57,11 +57,11 @@ become real when authentication arrives.
 | --- | --- |
 | Doctor ID | System-generated, read-only, format `D-0001` |
 | Full name | Required, 2–100 characters |
-| Specialization | Required, from a managed list (e.g. Cardiology, Dermatology, General Medicine, Orthopaedics, Paediatrics) |
-| Department | Required, from a managed list of departments |
+| Specialization | Required, one Active entry from the specializations list (§4.5), e.g. Cardiology, Dermatology, General Medicine |
+| Department | Required, one Active entry from the departments list (§4.5) |
 | Phone | Required, digits with optional leading `+`, 8–15 digits |
 | Email | Optional, valid email format |
-| Consultation fee | Required, ≥ 0. Stored as an integer in the smallest currency unit (paise); one currency for the hospital |
+| Consultation fee | Required, ≥ 0, in Indian rupees (INR). Stored as integer paise; shown as ₹ with two decimals |
 | Slot length | Required, minutes, one of 10, 15, 20, 30, 45, 60. Default 15 |
 | Availability | Weekly schedule: one or more blocks of day-of-week + start time + end time (e.g. Mon 09:00–13:00). Blocks for the same day must not overlap |
 | Status | Active or Inactive. Default Active |
@@ -176,7 +176,24 @@ zone (§7).
 | DSH-8 | Each tile links to the list it counts (e.g. Cancelled → appointment list filtered to Cancelled in the period). |
 | DSH-9 | The dashboard shows no medical history and no contact details. |
 
-### 4.5 Sign-in and access control (AUTH): deferred
+### 4.5 Departments and specializations (REF)
+
+Both are short lists that staff maintain. The MVP seeds a starting set (e.g. departments: Outpatient, Emergency,
+Surgery, Paediatrics; specializations: General Medicine, Cardiology, Dermatology, Orthopaedics, Paediatrics).
+
+| Field | Rules |
+| --- | --- |
+| Name | Required, 2–60 characters, unique within its list (case-insensitive) |
+| Status | Active or Inactive. Default Active |
+
+| Id | Requirement |
+| --- | --- |
+| REF-1 | Staff can list, add and rename departments and specializations. |
+| REF-2 | An entry used by any doctor cannot be deleted; staff set it Inactive instead. An unused entry can be deleted. |
+| REF-3 | Inactive entries cannot be chosen for a doctor. Doctors who already have them keep them, and the doctor page shows the entry as Inactive. |
+| REF-4 | Renaming an entry changes it everywhere it is shown, including existing doctors. |
+
+### 4.6 Sign-in and access control (AUTH): deferred
 
 Not built in the MVP. The architecture keeps it a contained change:
 
@@ -186,7 +203,7 @@ Not built in the MVP. The architecture keeps it a contained change:
 | AUTH-2 | Routes declare the permission they need (e.g. `appointments:write`). In the MVP every permission is granted; later the middleware checks the actor's roles. |
 | AUTH-3 | Records carry `created_at`, `created_by`, `updated_at`, `updated_by`, filled from the actor. |
 | AUTH-4 | When sign-in is added it uses the organisation's identity provider (OIDC). The app never stores passwords. |
-| AUTH-5 | Because the MVP has no sign-in, the shared test environment holds invented data only. |
+| AUTH-5 | Because the MVP has no sign-in, the shared test URL is open to anyone who has it. It holds invented data only. |
 
 ## 5. Data model
 
@@ -219,7 +236,8 @@ appointment no longer Scheduled) returns `409`; unknown IDs return `404`. Lists 
 | Patients | `GET/POST /api/patients`, `GET/PATCH/DELETE /api/patients/:id` |
 | Appointments | `GET/POST /api/appointments`, `GET /api/appointments/:id`, `POST /api/appointments/:id/reschedule`, `POST /api/appointments/:id/cancel`, `POST /api/appointments/:id/complete`, `POST /api/appointments/:id/no-show` |
 | Dashboard | `GET /api/dashboard?period=today\|7d\|30d` |
-| Reference data | `GET /api/departments`, `GET /api/specializations` |
+| Departments | `GET/POST /api/departments`, `PATCH/DELETE /api/departments/:id` |
+| Specializations | `GET/POST /api/specializations`, `PATCH/DELETE /api/specializations/:id` |
 | Health | `GET /api/health` |
 
 ## 7. Non-functional requirements
@@ -227,7 +245,7 @@ appointment no longer Scheduled) returns `409`; unknown IDs return `404`. Lists 
 | Id | Requirement |
 | --- | --- |
 | NFR-1 | Stack: Node.js 22, Express and TypeScript API; React web app; PostgreSQL 16; Vitest. Layers: routes → services → repositories. |
-| NFR-2 | One hospital time zone, set by configuration (default `Asia/Kolkata`). All "today" and slot calculations use it. |
+| NFR-2 | The hospital time zone is `Asia/Kolkata` (configurable). All "today" and slot calculations use it. Currency is INR. |
 | NFR-3 | List and dashboard requests answer within 500 ms with 10,000 patients and 50,000 appointments. |
 | NFR-4 | Every requirement ID above has at least one automated test that names it. Database tests run against a throwaway PostgreSQL, never the shared database. |
 | NFR-5 | No secrets in git. The database URL comes from the `DATABASE_URL` environment variable (Render settings, or a git-ignored `.env` on a laptop). |
@@ -264,11 +282,13 @@ The MVP is accepted when:
 3. Booking the same slot from two browsers at once leaves exactly one appointment (APT-4).
 4. The AI Skill Library context pack builds and signs cleanly against the MVP code.
 
-## 10. Open questions
+## 10. Decisions
 
-| Id | Question | Owner |
+| Id | Question | Decision |
 | --- | --- | --- |
-| OQ-1 | Currency and hospital time zone: INR and `Asia/Kolkata` assumed | TBD by Puneet |
-| OQ-2 | Should No-show stay in the MVP, or be added later as the first team feature? | TBD by Puneet |
-| OQ-3 | Should the shared test URL be restricted (e.g. basic access protection) until sign-in exists? | TBD by Puneet |
-| OQ-4 | Departments and specializations: fixed seed lists in the MVP, or editable by staff? (Assumed fixed.) | TBD by Puneet |
+| OQ-1 | Currency and hospital time zone | INR and `Asia/Kolkata` |
+| OQ-2 | No-show status | In the MVP (APT-7): a past appointment the patient missed is closed as No-show instead of staying Scheduled |
+| OQ-3 | Restrict the shared test URL before sign-in exists | No. The URL stays open; invented data only (AUTH-5) |
+| OQ-4 | Departments and specializations | Staff can maintain both lists (§4.5) |
+
+Features beyond this PRD are added on top of the MVP through AI Skill Library runs, one ticket at a time.
