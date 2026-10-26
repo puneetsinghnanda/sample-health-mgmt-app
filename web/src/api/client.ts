@@ -1,6 +1,6 @@
 import type {
   AppointmentDetail, AppointmentSummary, AvailabilityBlock, Dashboard, DaySchedule, DoctorDetail, DoctorSummary, Page,
-  PatientDetail, PatientSummary, Period, RefEntry, Settings,
+  PatientDetail, PatientListItem, Period, RefEntry, Settings,
 } from './types';
 
 export class ApiError extends Error {
@@ -65,7 +65,7 @@ export const api = {
   deleteDoctor: (id: number) => send<void>(`/api/doctors/${id}`, { method: 'DELETE' }),
   schedule: (id: number | string, date: string) => send<DaySchedule>(`/api/doctors/${id}/slots${query({ date })}`),
 
-  patients: (params: Record<string, string | number | undefined>) => send<Page<PatientSummary>>(`/api/patients${query(params)}`),
+  patients: (params: Record<string, string | number | undefined>) => send<Page<PatientListItem>>(`/api/patients${query(params)}`),
   patient: (id: number | string) => send<PatientDetail>(`/api/patients/${id}`),
   createPatient: (body: unknown) => send<PatientDetail>('/api/patients', { method: 'POST', body }),
   updatePatient: (id: number, body: unknown) => send<PatientDetail>(`/api/patients/${id}`, { method: 'PATCH', body }),

@@ -5,10 +5,21 @@ import { Loading } from '../components/Loading';
 import { Pagination } from '../components/Pagination';
 import { StatusBadge } from '../components/StatusBadge';
 import { useAsync } from '../hooks/useAsync';
-import { GENDER_LABEL } from '../lib/format';
+import { useSettings } from '../hooks/useSettings';
+import { dateTime, GENDER_LABEL } from '../lib/format';
+
+/** HMS-1: the hospital zone from settings; an invalid or missing zone falls back to the default. */
+function startsAt(iso: string, timeZone: string | undefined): string {
+  try {
+    return dateTime(iso, timeZone || 'Asia/Kolkata');
+  } catch {
+    return dateTime(iso, 'Asia/Kolkata');
+  }
+}
 
 /** PAT-2: newest first, 20 per page; search name, code or phone. No medical history here (PAT-8). */
 export function PatientsPage() {
+  const { timeZone } = useSettings();
   const [params, setParams] = useSearchParams();
   const filters = { q: params.get('q') ?? '', status: params.get('status') ?? '', page: params.get('page') ?? '1' };
   const list = useAsync(() => api.patients(filters), params.toString());
@@ -48,6 +59,7 @@ export function PatientsPage() {
                 <th scope="col">Gender</th>
                 <th scope="col">Phone</th>
                 <th scope="col">Status</th>
+                <th scope="col">Next appointment</th>
               </tr>
             </thead>
             <tbody>
@@ -59,6 +71,13 @@ export function PatientsPage() {
                   <td>{GENDER_LABEL[p.gender] ?? p.gender}</td>
                   <td>{p.phone}</td>
                   <td><StatusBadge status={p.status} /></td>
+                  <td>
+                    {p.next_appointment ? (
+                      <Link to={`/appointments/${p.next_appointment.id}`}>
+                        {startsAt(p.next_appointment.starts_at, timeZone)} · {p.next_appointment.doctor_name}
+                      </Link>
+                    ) : 'None'}
+                  </td>
                 </tr>
               ))}
             </tbody>

@@ -1,7 +1,7 @@
 import type { Queryable } from '../db';
 import { formatCode } from '../lib/codes';
 import { SUMMARY_SELECT, toSummary } from './appointmentRepo';
-import type { AppointmentSummary, PatientDetail, PatientSummary, RecordStatus } from '../types';
+import type { AppointmentSummary, PatientDetail, PatientListItem, PatientSummary, RecordStatus } from '../types';
 
 interface Row {
   id: number;
@@ -11,6 +11,12 @@ interface Row {
   phone: string;
   status: RecordStatus;
   created_at: Date;
+}
+
+interface ListRow extends Row {
+  next_id: number | null;
+  next_starts_at: Date | null;
+  next_doctor_name: string | null;
 }
 
 interface DetailRow extends Row {
@@ -91,8 +97,9 @@ export class PatientRepo {
     };
   }
 
+  /** HMS-1: each item also carries its earliest Scheduled appointment starting after `now`, in one query per page. */
   async list(f: { q?: { text: string; id: number | null }; status?: RecordStatus; limit: number; offset: number },
-    today: string): Promise<{ items: PatientSummary[]; total: number }> {
+    today: string, now: Date): Promise<{ items: PatientListItem[]; total: number }> {
     const where: string[] = [];
     const params: unknown[] = [];
     const p = (v: unknown): string => {
@@ -110,13 +117,32 @@ export class PatientRepo {
     if (f.status) where.push(`status = ${p(f.status)}`);
     const clause = where.length ? `WHERE ${where.join(' AND ')}` : '';
     const total = Number((await this.db.query<{ n: string }>(`SELECT count(*) AS n FROM patient ${clause}`, params)).rows[0]?.n ?? 0);
+    const page = `SELECT ${LIST_COLUMNS} FROM patient ${clause} ORDER BY created_at DESC, id DESC LIMIT ${p(f.limit)} OFFSET ${p(f.offset)}`;
     const rows = (
-      await this.db.query<Row>(
-        `SELECT ${LIST_COLUMNS} FROM patient ${clause} ORDER BY created_at DESC, id DESC LIMIT ${p(f.limit)} OFFSET ${p(f.offset)}`,
+      await this.db.query<ListRow>(
+        `SELECT pg.*, n.id AS next_id, n.starts_at AS next_starts_at, n.doctor_name AS next_doctor_name
+           FROM (${page}) pg
+           LEFT JOIN LATERAL (
+             SELECT a.id, a.starts_at, d.full_name AS doctor_name
+               FROM appointment a
+               JOIN doctor d ON d.id = a.doctor_id
+              WHERE a.patient_id = pg.id AND a.status = 'SCHEDULED' AND a.starts_at > ${p(now)}
+              ORDER BY a.starts_at, a.id
+              LIMIT 1
+           ) n ON true
+          ORDER BY pg.created_at DESC, pg.id DESC`,
         params,
       )
     ).rows;
-    return { items: rows.map((r) => this.summary(r, today)), total };
+    return {
+      items: rows.map((r) => ({
+        ...this.summary(r, today),
+        next_appointment: r.next_id === null || r.next_starts_at === null || r.next_doctor_name === null
+          ? null
+          : { id: r.next_id, starts_at: r.next_starts_at.toISOString(), doctor_name: r.next_doctor_name },
+      })),
+      total,
+    };
   }
 
   async get(id: number, today: string, forUpdate = false): Promise<Omit<PatientDetail, 'appointments'> | null> {

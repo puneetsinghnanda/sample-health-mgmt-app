@@ -5,7 +5,7 @@ import { conflict, notFound, pgError } from '../lib/errors';
 import { addDays, localDay } from '../lib/time';
 import { Fields } from '../lib/validate';
 import { PatientRepo, type PatientFields } from '../repositories/patientRepo';
-import { BLOOD_GROUPS, GENDERS, RECORD_STATUSES, type Page, type PatientDetail, type PatientSummary } from '../types';
+import { BLOOD_GROUPS, GENDERS, RECORD_STATUSES, type Page, type PatientDetail, type PatientListItem } from '../types';
 
 const LIST = { maxItems: 20, maxLength: 100 };
 
@@ -21,7 +21,7 @@ export class PatientService {
     return localDay(this.clock(), this.config.timeZone);
   }
 
-  async list(query: Record<string, unknown>, page: number): Promise<Page<PatientSummary>> {
+  async list(query: Record<string, unknown>, page: number): Promise<Page<PatientListItem>> {
     const f = new Fields(query);
     const text = f.text('q', { max: 100 });
     const status = f.oneOf('status', RECORD_STATUSES);
@@ -30,6 +30,7 @@ export class PatientService {
     const { items, total } = await new PatientRepo(this.db).list(
       { q: text ? { text, id: idFromCode('P', text) } : undefined, status, limit: size, offset: (page - 1) * size },
       this.today(),
+      this.clock(),
     );
     return { items, page, page_size: size, total };
   }
