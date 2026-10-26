@@ -70,6 +70,17 @@ export interface PatientSummary {
   registeredAt: string;
 }
 
+/** HMS-1: the earliest Scheduled appointment that starts after now. */
+export interface NextAppointment {
+  id: number;
+  starts_at: string;
+  doctor_name: string;
+}
+
+export interface PatientListItem extends PatientSummary {
+  next_appointment: NextAppointment | null;
+}
+
 export interface PatientDetail extends PatientSummary {
   email: string | null;
   address: string | null;
