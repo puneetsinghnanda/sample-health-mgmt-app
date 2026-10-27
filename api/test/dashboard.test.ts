@@ -36,6 +36,7 @@ describe.skipIf(!pgAvailable())('dashboard (PRD §4.4)', () => {
       upcoming: 2, // DSH-4: Scheduled, after now
       completed: 1, // DSH-5
       cancelled: 1, // DSH-6
+      noShows: 0, // HMS-3: none yet
     });
   });
 
@@ -59,5 +60,22 @@ describe.skipIf(!pgAvailable())('dashboard (PRD §4.4)', () => {
   it('DSH-9: carries no contact details or medical history', async () => {
     const text = JSON.stringify((await request(app).get('/api/dashboard')).body);
     expect(text).not.toMatch(/phone|email|allerg|medical|Penicillin/i);
+  });
+
+  // Runs last: it closes today's 09:30 appointment as No-show and moves the clock.
+  it('HMS-3 REQ-2/REQ-4/REQ-5/REQ-7: counts No-shows in the period, and the tile’s list matches', async () => {
+    clock = new Date(at(MONDAY, '09:40'));
+    const open = await request(app).get(`/api/appointments?status=SCHEDULED&from=${MONDAY}&to=${MONDAY}`);
+    const missed = open.body.items.find((a: { startsAt: string }) => a.startsAt === at(MONDAY, '09:30'));
+    expect((await request(app).post(`/api/appointments/${missed.id}/no-show`)).status).toBe(200);
+
+    const today = (await request(app).get('/api/dashboard')).body;
+    expect(today.totals).toMatchObject({ noShows: 1, completed: 1, cancelled: 1 });
+    const list = await request(app).get(`/api/appointments?status=NO_SHOW&from=${today.period.from}&to=${today.period.to}`);
+    expect(list.body.total).toBe(today.totals.noShows);
+
+    clock = new Date(at(TUESDAY, '10:30')); // Monday's No-show is outside Tuesday's Today, inside Last 7 days
+    expect((await request(app).get('/api/dashboard')).body.totals.noShows).toBe(0);
+    expect((await request(app).get('/api/dashboard?period=7d')).body.totals.noShows).toBe(1);
   });
 });
