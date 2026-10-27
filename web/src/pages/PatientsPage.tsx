@@ -76,7 +76,7 @@ export function PatientsPage() {
                       <Link to={`/appointments/${p.next_appointment.id}`}>
                         {startsAt(p.next_appointment.starts_at, timeZone)} · {p.next_appointment.doctor_name}
                       </Link>
-                    ) : 'None'}
+                    ) : '-'}
                   </td>
                 </tr>
               ))}
