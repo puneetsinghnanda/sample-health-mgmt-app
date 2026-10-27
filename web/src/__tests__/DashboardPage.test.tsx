@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import type { Dashboard } from '../api/types';
@@ -36,5 +36,33 @@ describe('DashboardPage (PRD §4.4)', () => {
     const tile = await screen.findByRole('link', { name: /No-shows/ });
     expect(tile.textContent).toBe('4No-shows');
     expect(tile.getAttribute('href')).toBe('/appointments?status=NO_SHOW&from=2026-10-19&to=2026-10-19');
+  });
+
+  it('HMS-3 REQ-5/REQ-7: changing the period reloads the No-shows count and moves its link to that period', async () => {
+    const week: Dashboard = { ...DATA, period: { name: '7d', from: '2026-10-13', to: '2026-10-19' }, totals: { ...DATA.totals, noShows: 11 } };
+    const fetchMock = vi.fn(async (url: string) =>
+      new Response(JSON.stringify(String(url).includes('period=7d') ? week : DATA), { status: 200 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <DashboardPage />
+      </MemoryRouter>,
+    );
+    await screen.findByRole('link', { name: /4\s*No-shows/ });
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: '7d' } });
+    const tile = await screen.findByRole('link', { name: /11\s*No-shows/ });
+    expect(tile.getAttribute('href')).toBe('/appointments?status=NO_SHOW&from=2026-10-13&to=2026-10-19');
+  });
+
+  it('HMS-3 REQ-2 edge: a period with no No-shows shows 0', async () => {
+    const none: Dashboard = { ...DATA, totals: { ...DATA.totals, noShows: 0 } };
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(none), { status: 200 })));
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <DashboardPage />
+      </MemoryRouter>,
+    );
+    expect((await screen.findByRole('link', { name: /No-shows/ })).textContent).toBe('0No-shows');
   });
 });
