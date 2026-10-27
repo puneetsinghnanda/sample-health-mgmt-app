@@ -36,6 +36,7 @@ describe.skipIf(!pgAvailable())('dashboard (PRD §4.4)', () => {
       upcoming: 2, // DSH-4: Scheduled, after now
       completed: 1, // DSH-5
       cancelled: 1, // DSH-6
+      noShows: 0, // HMS-3: none yet
     });
   });
 

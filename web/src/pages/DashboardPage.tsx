@@ -52,6 +52,11 @@ export function DashboardPage() {
               value={data.totals.cancelled}
               to={`/appointments${query({ status: 'CANCELLED', from: data.period.from, to: data.period.to })}`}
             />
+            <Tile
+              label="No-shows"
+              value={data.totals.noShows}
+              to={`/appointments${query({ status: 'NO_SHOW', from: data.period.from, to: data.period.to })}`}
+            />
           </div>
           <h2>Next appointments</h2>
           <AppointmentTable items={data.next} />
