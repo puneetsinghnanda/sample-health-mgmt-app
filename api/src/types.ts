@@ -95,6 +95,13 @@ export interface PatientDetail extends PatientSummary {
     notes: string | null;
   };
   appointments: AppointmentSummary[];
+  visit_summary: VisitSummary;
+}
+
+/** HMS-5: counts of the patient's Completed and No-show appointments. */
+export interface VisitSummary {
+  completed: number;
+  no_show: number;
 }
 
 export interface AppointmentEvent {
