@@ -32,7 +32,12 @@ export class PatientService {
       this.today(),
       this.clock(),
     );
-    return { items, page, page_size: size, total };
+    // HMS-4: the last visit is sent as the hospital-local day, so the browser zone never applies.
+    const listItems = items.map(({ last_visit_at, ...item }) => ({
+      ...item,
+      last_visit_date: last_visit_at ? localDay(last_visit_at, this.config.timeZone) : null,
+    }));
+    return { items: listItems, page, page_size: size, total };
   }
 
   async get(id: number): Promise<PatientDetail> {

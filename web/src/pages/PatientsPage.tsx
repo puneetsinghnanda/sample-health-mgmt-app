@@ -59,6 +59,7 @@ export function PatientsPage() {
                 <th scope="col">Gender</th>
                 <th scope="col">Phone</th>
                 <th scope="col">Status</th>
+                <th scope="col">Last visit</th>
                 <th scope="col">Next appointment</th>
               </tr>
             </thead>
@@ -71,6 +72,8 @@ export function PatientsPage() {
                   <td>{GENDER_LABEL[p.gender] ?? p.gender}</td>
                   <td>{p.phone}</td>
                   <td><StatusBadge status={p.status} /></td>
+                  {/* HMS-4: a hospital-local day from the API, shown as text so the browser zone cannot shift it. */}
+                  <td>{p.last_visit_date ?? '-'}</td>
                   <td>
                     {p.next_appointment ? (
                       <Link to={`/appointments/${p.next_appointment.id}`}>

@@ -79,6 +79,8 @@ export interface NextAppointment {
 
 export interface PatientListItem extends PatientSummary {
   next_appointment: NextAppointment | null;
+  /** HMS-4: hospital-local day (YYYY-MM-DD) of the latest Completed appointment, or null. Shown as text, never parsed. */
+  last_visit_date: string | null;
 }
 
 export interface PatientDetail extends PatientSummary {

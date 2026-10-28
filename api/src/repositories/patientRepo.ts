@@ -17,7 +17,11 @@ interface ListRow extends Row {
   next_id: number | null;
   next_starts_at: Date | null;
   next_doctor_name: string | null;
+  last_visit_at: Date | null;
 }
+
+/** A list item before the service turns the last visit instant into a hospital-local day. */
+export type PatientListRow = Omit<PatientListItem, 'last_visit_date'> & { last_visit_at: Date | null };
 
 interface DetailRow extends Row {
   email: string | null;
@@ -97,9 +101,12 @@ export class PatientRepo {
     };
   }
 
-  /** HMS-1: each item also carries its earliest Scheduled appointment starting after `now`, in one query per page. */
+  /**
+   * HMS-1: each item also carries its earliest Scheduled appointment starting after `now`, in one query per page.
+   * HMS-4: and the start of its latest Completed appointment.
+   */
   async list(f: { q?: { text: string; id: number | null }; status?: RecordStatus; limit: number; offset: number },
-    today: string, now: Date): Promise<{ items: PatientListItem[]; total: number }> {
+    today: string, now: Date): Promise<{ items: PatientListRow[]; total: number }> {
     const where: string[] = [];
     const params: unknown[] = [];
     const p = (v: unknown): string => {
@@ -120,7 +127,9 @@ export class PatientRepo {
     const page = `SELECT ${LIST_COLUMNS} FROM patient ${clause} ORDER BY created_at DESC, id DESC LIMIT ${p(f.limit)} OFFSET ${p(f.offset)}`;
     const rows = (
       await this.db.query<ListRow>(
-        `SELECT pg.*, n.id AS next_id, n.starts_at AS next_starts_at, n.doctor_name AS next_doctor_name
+        `SELECT pg.*, n.id AS next_id, n.starts_at AS next_starts_at, n.doctor_name AS next_doctor_name,
+                (SELECT max(c.starts_at) FROM appointment c
+                  WHERE c.patient_id = pg.id AND c.status = 'COMPLETED') AS last_visit_at
            FROM (${page}) pg
            LEFT JOIN LATERAL (
              SELECT a.id, a.starts_at, d.full_name AS doctor_name
@@ -140,6 +149,7 @@ export class PatientRepo {
         next_appointment: r.next_id === null || r.next_starts_at === null || r.next_doctor_name === null
           ? null
           : { id: r.next_id, starts_at: r.next_starts_at.toISOString(), doctor_name: r.next_doctor_name },
+        last_visit_at: r.last_visit_at,
       })),
       total,
     };
