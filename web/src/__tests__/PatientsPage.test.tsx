@@ -39,7 +39,7 @@ describe('PatientsPage last visit column (HMS-4)', () => {
     else process.env.TZ = zone;
   });
 
-  it('HMS-4 S-1 AC4: shows the hospital-local day as returned when the browser zone is west of UTC', async () => {
+  it('HMS-4 REQ-3 (S-1 AC4): shows the hospital-local day as returned when the browser zone is west of UTC', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(DATA), { status: 200 })));
     render(
       <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
@@ -48,6 +48,27 @@ describe('PatientsPage last visit column (HMS-4)', () => {
     );
     expect((await lastVisitCell('Test Patient 002')).textContent).toBe('2026-10-27');
     expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toContain('Last visit');
+  });
+
+  it('HMS-4 REQ-8: shows "-" when the patient has no Completed appointment', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(DATA), { status: 200 })));
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <PatientsPage />
+      </MemoryRouter>,
+    );
+    expect((await lastVisitCell('Test Patient 001')).textContent).toBe('-');
+  });
+
+  it('HMS-4 REQ-1, REQ-12: Last visit sits just before Next appointment, which stays the last column', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(DATA), { status: 200 })));
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <PatientsPage />
+      </MemoryRouter>,
+    );
+    await screen.findByText('Test Patient 001');
+    expect(screen.getAllByRole('columnheader').map((h) => h.textContent).slice(-2)).toEqual(['Last visit', 'Next appointment']);
   });
 });
 
