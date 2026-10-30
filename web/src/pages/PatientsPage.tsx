@@ -50,6 +50,10 @@ export function PatientsPage() {
       {list.loading && !list.data && <Loading />}
       {list.data && (
         <>
+          {/* LIVE-1: every patient that matches the search, not only this page (total from the list response). */}
+          <p className="muted" aria-live="polite">
+            {list.data.total === 1 ? '1 patient' : `${list.data.total} patients`}
+          </p>
           <table>
             <thead>
               <tr>
