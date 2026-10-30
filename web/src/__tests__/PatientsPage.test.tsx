@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import type { Page, PatientListItem } from '../api/types';
@@ -46,5 +46,60 @@ describe('PatientsPage next appointment column (HMS-2)', () => {
     expect(link.getAttribute('href')).toBe('/appointments/7');
     expect(link.textContent).toContain('Test Doctor 001');
     expect(link.textContent).not.toBe('-');
+  });
+});
+
+describe('PatientsPage match count (LIVE-1)', () => {
+  function renderWith(page: Page<PatientListItem>) {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(page), { status: 200 })));
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <PatientsPage />
+      </MemoryRouter>,
+    );
+  }
+
+  it('REQ-1, REQ-5: shows every match from total, not only the rows on this page', async () => {
+    renderWith({ ...DATA, total: 12 });
+    expect(await screen.findByText('12 patients')).toBeTruthy();
+    expect(screen.queryByText('2 patients')).toBeNull();
+  });
+
+  it('REQ-2: the count follows a change of the search text', async () => {
+    const fetchMock = vi.fn()
+      .mockImplementationOnce(async () => new Response(JSON.stringify({ ...DATA, total: 12 }), { status: 200 }))
+      .mockImplementation(async () => new Response(JSON.stringify({ ...DATA, items: [DATA.items[0]!], total: 3 }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <PatientsPage />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText('12 patients')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Search by name, code or phone'), { target: { value: 'Test Patient 001' } });
+    expect(await screen.findByText('3 patients')).toBeTruthy();
+    expect(screen.queryByText('12 patients')).toBeNull();
+  });
+
+  it('REQ-1: a failed list request shows the error and no count line', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ error: { message: 'Test failure 001' } }), { status: 500 })));
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <PatientsPage />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText('Test failure 001')).toBeTruthy();
+    expect(screen.queryByText(/^\d+ patients?$/)).toBeNull();
+  });
+
+  it('REQ-1: one match reads "1 patient"', async () => {
+    renderWith({ ...DATA, items: [DATA.items[0]!], total: 1 });
+    expect(await screen.findByText('1 patient')).toBeTruthy();
+  });
+
+  it('REQ-3, REQ-4: no match shows "0 patients" and keeps the empty message', async () => {
+    renderWith({ ...DATA, items: [], total: 0 });
+    expect(await screen.findByText('0 patients')).toBeTruthy();
+    expect(screen.getByText('No patients match.')).toBeTruthy();
   });
 });
