@@ -59,6 +59,51 @@ describe.skipIf(!pgAvailable())('patient list last visit (HMS-4)', () => {
   });
 });
 
+/** HMS-4: paging and order of the list are unchanged by the last visit. */
+describe.skipIf(!pgAvailable())('patient list last visit: paging and order (HMS-4)', () => {
+  let db: TestDb;
+  let app: Express;
+  beforeAll(async () => {
+    db = await freshDatabase();
+    app = testApp(db.pool);
+    const later = testApp(db.pool, () => new Date(at(TUESDAY, '10:20')));
+    await loadFixture(app);
+    // The oldest patient (fixture patient 1) gets a visit, so page 2 can show it with its date.
+    const visit = (await book(app, 1, 1, MONDAY, '09:00')).body;
+    expect((await request(later).post(`/api/appointments/${visit.id}/complete`).send({})).body).toMatchObject({ status: 'COMPLETED' });
+    // 19 invented patients on top of the 2 in the fixture: 21 in all, one more than a page.
+    for (let i = 1; i <= 19; i++) {
+      const n = String(i).padStart(4, '0');
+      const res = await request(app).post('/api/patients')
+        .send({ fullName: `Test Patient P${n}`, dateOfBirth: '1990-01-01', gender: 'OTHER', phone: `+91 00000 4${n}` });
+      expect(res.status).toBe(201);
+    }
+  });
+  afterAll(async () => {
+    await db.drop();
+  });
+
+  it('HMS-4 REQ-8: page 1 holds 20 patients and page 2 still carries last_visit_at', async () => {
+    const first = await request(app).get('/api/patients');
+    expect(first.body).toMatchObject({ page: 1, page_size: 20, total: 21 });
+    expect(first.body.items).toHaveLength(20);
+    for (const p of first.body.items) expect(p).toHaveProperty('last_visit_at', null);
+    const second = await request(app).get('/api/patients?page=2');
+    expect(second.body).toMatchObject({ page: 2, page_size: 20, total: 21 });
+    expect(second.body.items.map((p: { id: number; last_visit_at: string | null }) => [p.id, p.last_visit_at]))
+      .toEqual([[1, at(MONDAY, '09:00')]]);
+  });
+
+  it('HMS-4 REQ-10: the list stays newest first across pages', async () => {
+    const ids = [
+      ...(await request(app).get('/api/patients')).body.items,
+      ...(await request(app).get('/api/patients?page=2')).body.items,
+    ].map((p: { id: number }) => p.id);
+    expect(ids).toHaveLength(21);
+    expect(ids).toEqual([...ids].sort((a, b) => b - a));
+  });
+});
+
 /** HMS-4: Cancelled, No-show and Scheduled appointments never count as a visit. */
 describe.skipIf(!pgAvailable())('patient list last visit: other statuses (HMS-4)', () => {
   let db: TestDb;
