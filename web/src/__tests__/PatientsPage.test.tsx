@@ -2,9 +2,10 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import type { Page, PatientListItem } from '../api/types';
+import { dateTime } from '../lib/format';
 import { PatientsPage } from '../pages/PatientsPage';
 
-const BASE = { dateOfBirth: '1990-01-01', age: 36, gender: 'OTHER', phone: '+91 00000 00000', status: 'ACTIVE' as const, registeredAt: '2026-10-01T04:30:00Z' };
+const BASE = { dateOfBirth: '1990-01-01', age: 36, gender: 'OTHER', phone: '+91 00000 00000', status: 'ACTIVE' as const, registeredAt: '2026-10-01T04:30:00Z', last_visit_at: null };
 
 const DATA: Page<PatientListItem> = {
   items: [
@@ -46,6 +47,59 @@ describe('PatientsPage next appointment column (HMS-2)', () => {
     expect(link.getAttribute('href')).toBe('/appointments/7');
     expect(link.textContent).toContain('Test Doctor 001');
     expect(link.textContent).not.toBe('-');
+  });
+});
+
+describe('PatientsPage last visit column (HMS-4)', () => {
+  // 20:00 UTC on 27 Oct is already 28 Oct in Kolkata, so a UTC date would show the wrong day.
+  const VISITED = '2026-10-27T20:00:00Z';
+  const VISITS: Page<PatientListItem> = {
+    ...DATA,
+    items: [DATA.items[0]!, { ...DATA.items[1]!, last_visit_at: VISITED }],
+  };
+
+  async function lastVisitCell(name: string): Promise<HTMLElement> {
+    const row = (await screen.findByText(name)).closest('tr')!;
+    const cells = within(row).getAllByRole('cell');
+    return cells[cells.length - 2]!;
+  }
+
+  function renderVisits() {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(VISITS), { status: 200 })));
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <PatientsPage />
+      </MemoryRouter>,
+    );
+  }
+
+  it('HMS-4 REQ-1: the list has a "Last visit" column before Next appointment', async () => {
+    renderVisits();
+    await screen.findByText('Test Patient 001');
+    const headers = screen.getAllByRole('columnheader').map((h) => h.textContent);
+    expect(headers.slice(-2)).toEqual(['Last visit', 'Next appointment']);
+  });
+
+  it('HMS-4 REQ-7: shows "-" when the patient has no Completed appointment', async () => {
+    renderVisits();
+    expect((await lastVisitCell('Test Patient 001')).textContent).toBe('-');
+  });
+
+  it('HMS-4 REQ-3, REQ-14: formats the visit in the hospital zone like Next appointment', async () => {
+    renderVisits();
+    expect((await lastVisitCell('Test Patient 002')).textContent).toBe(dateTime(VISITED, 'Asia/Kolkata'));
+  });
+
+  it('HMS-4 REQ-1: the Last visit cell is plain text, not a link', async () => {
+    renderVisits();
+    expect(within(await lastVisitCell('Test Patient 002')).queryByRole('link')).toBeNull();
+  });
+
+  it('HMS-4 REQ-11: the Next appointment column is unchanged next to a Last visit', async () => {
+    renderVisits();
+    const link = within(await nextCell('Test Patient 002')).getByRole('link');
+    expect(link.getAttribute('href')).toBe('/appointments/7');
+    expect(link.textContent).toContain('Test Doctor 001');
   });
 });
 
