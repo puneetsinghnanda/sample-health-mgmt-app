@@ -87,7 +87,7 @@ describe.skipIf(!pgAvailable())('patient management (PRD §4.2)', () => {
   it('PAT-8: lists and appointment views never carry medical history', async () => {
     const list = await request(app).get('/api/patients');
     for (const p of list.body.items) {
-      expect(Object.keys(p).sort()).toEqual(['age', 'code', 'dateOfBirth', 'fullName', 'gender', 'id', 'next_appointment', 'phone', 'registeredAt', 'status']);
+      expect(Object.keys(p).sort()).toEqual(['age', 'code', 'dateOfBirth', 'fullName', 'gender', 'id', 'last_visit_at', 'next_appointment', 'phone', 'registeredAt', 'status']);
       // HMS-1: the next appointment carries only its id, start and doctor name.
       if (p.next_appointment !== null) expect(Object.keys(p.next_appointment).sort()).toEqual(['doctor_name', 'id', 'starts_at']);
     }
