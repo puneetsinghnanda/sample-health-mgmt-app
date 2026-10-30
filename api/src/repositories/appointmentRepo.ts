@@ -1,6 +1,6 @@
 import type { Queryable } from '../db';
 import { formatCode } from '../lib/codes';
-import type { AppointmentDetail, AppointmentEvent, AppointmentStatus, AppointmentSummary } from '../types';
+import type { AppointmentDetail, AppointmentEvent, AppointmentStatus, AppointmentSummary, VisitSummary } from '../types';
 
 interface SummaryRow {
   id: number;
@@ -81,6 +81,19 @@ export class AppointmentRepo {
       )
     ).rows;
     return { items: rows.map(toSummary), total };
+  }
+
+  /** HMS-5: Completed and No-show appointments of one patient, all time; Scheduled and Cancelled are not counted. */
+  async visitSummary(patientId: number): Promise<VisitSummary> {
+    const row = (
+      await this.db.query<{ completed: string; no_show: string }>(
+        `SELECT count(*) FILTER (WHERE status = 'COMPLETED') AS completed,
+                count(*) FILTER (WHERE status = 'NO_SHOW') AS no_show
+           FROM appointment WHERE patient_id = $1`,
+        [patientId],
+      )
+    ).rows[0];
+    return { completed: Number(row?.completed ?? 0), no_show: Number(row?.no_show ?? 0) };
   }
 
   async get(id: number, forUpdate = false): Promise<DetailRow | null> {

@@ -93,6 +93,7 @@ export interface PatientDetail extends PatientSummary {
     notes: string | null;
   };
   appointments: AppointmentSummary[];
+  visit_summary: { completed: number; no_show: number };
 }
 
 export interface AppointmentDetail extends AppointmentSummary {

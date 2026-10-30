@@ -4,6 +4,7 @@ import { formatCode, idFromCode } from '../lib/codes';
 import { conflict, notFound, pgError } from '../lib/errors';
 import { addDays, localDay } from '../lib/time';
 import { Fields } from '../lib/validate';
+import { AppointmentRepo } from '../repositories/appointmentRepo';
 import { PatientRepo, type PatientFields } from '../repositories/patientRepo';
 import { BLOOD_GROUPS, GENDERS, RECORD_STATUSES, type Page, type PatientDetail, type PatientListItem } from '../types';
 
@@ -39,7 +40,11 @@ export class PatientService {
     const repo = new PatientRepo(this.db);
     const patient = await repo.get(id, this.today());
     if (!patient) throw notFound(`Patient ${formatCode('P', id)} not found`);
-    return { ...patient, appointments: await repo.appointments(id, this.clock()) };
+    return {
+      ...patient,
+      appointments: await repo.appointments(id, this.clock()),
+      visit_summary: await new AppointmentRepo(this.db).visitSummary(id),
+    };
   }
 
   /** PAT-1, with the PAT-5 duplicate warning unless the caller confirms. */
