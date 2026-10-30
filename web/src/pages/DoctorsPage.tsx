@@ -1,15 +1,21 @@
 import { Link, useSearchParams } from 'react-router-dom';
-import { api } from '../api/client';
+import { api, query } from '../api/client';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { Loading } from '../components/Loading';
 import { Pagination } from '../components/Pagination';
 import { StatusBadge } from '../components/StatusBadge';
 import { useAsync } from '../hooks/useAsync';
-import { rupees } from '../lib/format';
+import { useSettings } from '../hooks/useSettings';
+import { rupees, todayIn } from '../lib/format';
 
-/** DOC-2: 20 per page by name; filter by department, specialization and status; search name or code. */
+/**
+ * DOC-2: 20 per page by name; filter by department, specialization and status; search name or code.
+ * HMS-6: "Today" counts each doctor's appointments today and links to them.
+ */
 export function DoctorsPage() {
   const [params, setParams] = useSearchParams();
+  const { timeZone } = useSettings();
+  const today = todayIn(timeZone);
   const filters = {
     q: params.get('q') ?? '',
     departmentId: params.get('departmentId') ?? '',
@@ -17,7 +23,7 @@ export function DoctorsPage() {
     status: params.get('status') ?? '',
     page: params.get('page') ?? '1',
   };
-  const list = useAsync(() => api.doctors(filters), params.toString());
+  const list = useAsync(() => api.doctorsWithToday(filters), params.toString());
   const refs = useAsync(() => Promise.all([api.references('departments'), api.references('specializations')]), 'refs');
   const set = (key: string, value: string) => {
     const next = new URLSearchParams(params);
@@ -65,6 +71,7 @@ export function DoctorsPage() {
                 <th scope="col">Department</th>
                 <th scope="col">Fee</th>
                 <th scope="col">Status</th>
+                <th scope="col">Today</th>
               </tr>
             </thead>
             <tbody>
@@ -76,6 +83,7 @@ export function DoctorsPage() {
                   <td>{d.department.name}</td>
                   <td>{rupees(d.feePaise)}</td>
                   <td><StatusBadge status={d.status} /></td>
+                  <td><Link to={`/appointments${query({ doctorId: d.id, from: today, to: today })}`}>{d.today_count}</Link></td>
                 </tr>
               ))}
             </tbody>

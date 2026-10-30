@@ -1,5 +1,5 @@
 import type {
-  AppointmentDetail, AppointmentSummary, AvailabilityBlock, Dashboard, DaySchedule, DoctorDetail, DoctorSummary, Page,
+  AppointmentDetail, AppointmentSummary, AvailabilityBlock, Dashboard, DaySchedule, DoctorDetail, DoctorListRow, DoctorSummary, Page,
   PatientDetail, PatientListItem, Period, RefEntry, Settings,
 } from './types';
 
@@ -57,6 +57,8 @@ export const api = {
     send<void>(`/api/${kind}/${id}`, { method: 'DELETE' }),
 
   doctors: (params: Record<string, string | number | undefined>) => send<Page<DoctorSummary>>(`/api/doctors${query(params)}`),
+  doctorsWithToday: (params: Record<string, string | number | undefined>) =>
+    send<Page<DoctorListRow>>(`/api/doctors${query({ ...params, with_today: 'true' })}`),
   doctor: (id: number | string) => send<DoctorDetail>(`/api/doctors/${id}`),
   createDoctor: (body: unknown) => send<DoctorDetail>('/api/doctors', { method: 'POST', body }),
   updateDoctor: (id: number, body: unknown) => send<DoctorDetail>(`/api/doctors/${id}`, { method: 'PATCH', body }),
