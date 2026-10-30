@@ -89,6 +89,18 @@ describe('PatientsPage last visit column (HMS-4)', () => {
     renderVisits();
     expect((await lastVisitCell('Test Patient 002')).textContent).toBe(dateTime(VISITED, 'Asia/Kolkata'));
   });
+
+  it('HMS-4 REQ-1: the Last visit cell is plain text, not a link', async () => {
+    renderVisits();
+    expect(within(await lastVisitCell('Test Patient 002')).queryByRole('link')).toBeNull();
+  });
+
+  it('HMS-4 REQ-11: the Next appointment column is unchanged next to a Last visit', async () => {
+    renderVisits();
+    const link = within(await nextCell('Test Patient 002')).getByRole('link');
+    expect(link.getAttribute('href')).toBe('/appointments/7');
+    expect(link.textContent).toContain('Test Doctor 001');
+  });
 });
 
 describe('PatientsPage match count (LIVE-1)', () => {

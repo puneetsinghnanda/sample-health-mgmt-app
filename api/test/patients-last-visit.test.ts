@@ -36,6 +36,27 @@ describe.skipIf(!pgAvailable())('patient list last visit (HMS-4)', () => {
     }
     expect(await lastOf(app, 1)).toBe(at(TUESDAY, '09:00'));
   });
+
+  it('HMS-4 REQ-4, REQ-7: a patient whose only appointment is Cancelled shows null, not another patient\'s visit', async () => {
+    const called = (await book(app, 2, 2, MONDAY, '09:30')).body;
+    expect((await request(app).post(`/api/appointments/${called.id}/cancel`).send({ reason: 'Patient requested' })).body)
+      .toMatchObject({ status: 'CANCELLED' });
+    expect(await lastOf(app, 2)).toBeNull();
+    expect(await lastOf(app, 1)).toBe(at(TUESDAY, '09:00'));
+  });
+
+  it('HMS-4 REQ-8, REQ-9: search and paging still return the matched patient with its last visit', async () => {
+    const res = await request(app).get('/api/patients?q=patient one');
+    expect(res.body).toMatchObject({ page: 1, page_size: 20, total: 1 });
+    expect(res.body.items.map((p: { id: number; last_visit_at: string | null }) => [p.id, p.last_visit_at]))
+      .toEqual([[1, at(TUESDAY, '09:00')]]);
+  });
+
+  it('HMS-4 REQ-9: an invalid list filter is still rejected with a field error', async () => {
+    const res = await request(app).get('/api/patients?status=SOMETIMES');
+    expect(res.status).toBe(400);
+    expect(Object.keys(res.body.error.fields)).toEqual(['status']);
+  });
 });
 
 /** HMS-4: Cancelled, No-show and Scheduled appointments never count as a visit. */
