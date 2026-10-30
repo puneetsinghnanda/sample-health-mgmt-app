@@ -3,13 +3,13 @@ import { inTransaction, type Database, type Queryable } from '../db';
 import { formatCode, idFromCode } from '../lib/codes';
 import { conflict, fieldError, notFound, pgError } from '../lib/errors';
 import { availabilityProblem, daySlots, withinAvailability } from '../lib/slots';
-import { dayBounds } from '../lib/time';
+import { dayBounds, localDay } from '../lib/time';
 import { Fields } from '../lib/validate';
 import { AppointmentRepo } from '../repositories/appointmentRepo';
 import { DoctorRepo, type DoctorFields } from '../repositories/doctorRepo';
 import {
   RECORD_STATUSES, SLOT_MINUTES, type AppointmentSummary, type AvailabilityBlock, type DoctorDetail,
-  type DoctorSummary, type Page, type RecordStatus,
+  type DoctorListRow, type DoctorSummary, type Page, type RecordStatus,
 } from '../types';
 
 export interface DaySchedule {
@@ -29,8 +29,10 @@ export class DoctorService {
     private readonly clock: () => Date,
   ) {}
 
-  async list(query: Record<string, unknown>, page: number): Promise<Page<DoctorSummary>> {
+  /** DOC-2; with_today=true adds each doctor's appointments today (HMS-6). */
+  async list(query: Record<string, unknown>, page: number): Promise<Page<DoctorSummary | DoctorListRow>> {
     const f = new Fields(query);
+    const withToday = f.oneOf('with_today', ['true', 'false'] as const) === 'true';
     const departmentId = typeof query.departmentId === 'string' && query.departmentId ? Number(query.departmentId) : undefined;
     const specializationId =
       typeof query.specializationId === 'string' && query.specializationId ? Number(query.specializationId) : undefined;
@@ -48,7 +50,12 @@ export class DoctorService {
       limit: size,
       offset: (page - 1) * size,
     });
-    return { items, page, page_size: size, total };
+    if (!withToday) return { items, page, page_size: size, total };
+    // Same rule as the dashboard's "Appointments today": starts today in the hospital zone, not cancelled.
+    const tz = this.config.timeZone;
+    const { start, end } = dayBounds(localDay(this.clock(), tz), tz);
+    const counts = await new AppointmentRepo(this.db).countTodayByDoctor(items.map((d) => d.id), start, end);
+    return { items: items.map((d) => ({ ...d, today_count: counts.get(d.id) ?? 0 })), page, page_size: size, total };
   }
 
   async get(id: number): Promise<DoctorDetail> {
