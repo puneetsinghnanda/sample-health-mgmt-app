@@ -64,6 +64,7 @@ export function PatientsPage() {
                 <th scope="col">Phone</th>
                 <th scope="col">Status</th>
                 <th scope="col">Next appointment</th>
+                <th scope="col">Last visit</th>
               </tr>
             </thead>
             <tbody>
@@ -82,6 +83,8 @@ export function PatientsPage() {
                       </Link>
                     ) : '-'}
                   </td>
+                  {/* HMS-4: same format and zone as Next appointment; "-" when there is no Completed appointment. */}
+                  <td>{p.lastVisitAt ? startsAt(p.lastVisitAt, timeZone) : '-'}</td>
                 </tr>
               ))}
             </tbody>

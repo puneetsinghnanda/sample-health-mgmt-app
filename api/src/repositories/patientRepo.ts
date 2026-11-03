@@ -17,6 +17,7 @@ interface ListRow extends Row {
   next_id: number | null;
   next_starts_at: Date | null;
   next_doctor_name: string | null;
+  last_visit_at: Date | null;
 }
 
 interface DetailRow extends Row {
@@ -120,7 +121,8 @@ export class PatientRepo {
     const page = `SELECT ${LIST_COLUMNS} FROM patient ${clause} ORDER BY created_at DESC, id DESC LIMIT ${p(f.limit)} OFFSET ${p(f.offset)}`;
     const rows = (
       await this.db.query<ListRow>(
-        `SELECT pg.*, n.id AS next_id, n.starts_at AS next_starts_at, n.doctor_name AS next_doctor_name
+        `SELECT pg.*, n.id AS next_id, n.starts_at AS next_starts_at, n.doctor_name AS next_doctor_name,
+                lv.starts_at AS last_visit_at
            FROM (${page}) pg
            LEFT JOIN LATERAL (
              SELECT a.id, a.starts_at, d.full_name AS doctor_name
@@ -130,6 +132,14 @@ export class PatientRepo {
               ORDER BY a.starts_at, a.id
               LIMIT 1
            ) n ON true
+           -- HMS-4: latest start of a COMPLETED appointment; one row per patient, uses appointment_patient_start_idx.
+           LEFT JOIN LATERAL (
+             SELECT a.starts_at
+               FROM appointment a
+              WHERE a.patient_id = pg.id AND a.status = 'COMPLETED'
+              ORDER BY a.starts_at DESC
+              LIMIT 1
+           ) lv ON true
           ORDER BY pg.created_at DESC, pg.id DESC`,
         params,
       )
@@ -140,6 +150,7 @@ export class PatientRepo {
         next_appointment: r.next_id === null || r.next_starts_at === null || r.next_doctor_name === null
           ? null
           : { id: r.next_id, starts_at: r.next_starts_at.toISOString(), doctor_name: r.next_doctor_name },
+        lastVisitAt: r.last_visit_at === null ? null : r.last_visit_at.toISOString(),
       })),
       total,
     };

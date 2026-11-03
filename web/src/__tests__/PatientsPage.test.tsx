@@ -8,8 +8,8 @@ const BASE = { dateOfBirth: '1990-01-01', age: 36, gender: 'OTHER', phone: '+91 
 
 const DATA: Page<PatientListItem> = {
   items: [
-    { ...BASE, id: 1, code: 'P-000001', fullName: 'Test Patient 001', next_appointment: null },
-    { ...BASE, id: 2, code: 'P-000002', fullName: 'Test Patient 002', next_appointment: { id: 7, starts_at: '2026-10-28T04:30:00Z', doctor_name: 'Test Doctor 001' } },
+    { ...BASE, id: 1, code: 'P-000001', fullName: 'Test Patient 001', next_appointment: null, lastVisitAt: null },
+    { ...BASE, id: 2, code: 'P-000002', fullName: 'Test Patient 002', next_appointment: { id: 7, starts_at: '2026-10-28T04:30:00Z', doctor_name: 'Test Doctor 001' }, lastVisitAt: null },
   ],
   page: 1,
   page_size: 20,
@@ -19,7 +19,8 @@ const DATA: Page<PatientListItem> = {
 async function nextCell(name: string): Promise<HTMLElement> {
   const row = (await screen.findByText(name)).closest('tr')!;
   const cells = within(row).getAllByRole('cell');
-  return cells[cells.length - 1]!;
+  // HMS-4: Last visit is now the last column, so Next appointment is second to last.
+  return cells[cells.length - 2]!;
 }
 
 describe('PatientsPage next appointment column (HMS-2)', () => {
@@ -46,6 +47,46 @@ describe('PatientsPage next appointment column (HMS-2)', () => {
     expect(link.getAttribute('href')).toBe('/appointments/7');
     expect(link.textContent).toContain('Test Doctor 001');
     expect(link.textContent).not.toBe('-');
+  });
+});
+
+describe('PatientsPage last visit column (HMS-4)', () => {
+  /** 01:00 Asia/Kolkata on 10 March is 19:30 UTC on 9 March. */
+  const VISIT = '2026-03-09T19:30:00.000Z';
+  const WITH_VISIT: Page<PatientListItem> = {
+    ...DATA,
+    items: [DATA.items[0]!, { ...DATA.items[1]!, next_appointment: { id: 7, starts_at: VISIT, doctor_name: 'Test Doctor 001' }, lastVisitAt: VISIT }],
+  };
+  async function lastCell(name: string): Promise<HTMLElement> {
+    const row = (await screen.findByText(name)).closest('tr')!;
+    const cells = within(row).getAllByRole('cell');
+    return cells[cells.length - 1]!;
+  }
+  function show(page: Page<PatientListItem>) {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(page), { status: 200 })));
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <PatientsPage />
+      </MemoryRouter>,
+    );
+  }
+
+  it('HMS-4 REQ-1: the list has a Last visit column', async () => {
+    show(WITH_VISIT);
+    expect(await screen.findByRole('columnheader', { name: 'Last visit' })).toBeTruthy();
+  });
+
+  it('HMS-4 REQ-5, REQ-6: shows the visit in the same format and zone as Next appointment', async () => {
+    show(WITH_VISIT);
+    const shown = (await lastCell('Test Patient 002')).textContent;
+    const next = within(await nextCell('Test Patient 002')).getByRole('link').textContent!;
+    expect(shown).toBe(next.split(' · ')[0]);
+    expect(shown).toMatch(/10/);
+  });
+
+  it('HMS-4 REQ-8: shows "-" when lastVisitAt is null', async () => {
+    show(WITH_VISIT);
+    expect((await lastCell('Test Patient 001')).textContent).toBe('-');
   });
 });
 

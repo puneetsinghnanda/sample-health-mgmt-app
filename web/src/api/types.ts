@@ -85,6 +85,8 @@ export interface NextAppointment {
 
 export interface PatientListItem extends PatientSummary {
   next_appointment: NextAppointment | null;
+  /** HMS-4: start of the latest COMPLETED appointment, ISO 8601 UTC; null when there is none. */
+  lastVisitAt: string | null;
 }
 
 export interface PatientDetail extends PatientSummary {
