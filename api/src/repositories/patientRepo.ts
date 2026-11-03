@@ -145,7 +145,7 @@ export class PatientRepo {
     };
   }
 
-  async get(id: number, today: string, forUpdate = false): Promise<Omit<PatientDetail, 'appointments'> | null> {
+  async get(id: number, today: string, forUpdate = false): Promise<Omit<PatientDetail, 'appointments' | 'visit_summary'> | null> {
     const r = (
       await this.db.query<DetailRow>(
         `SELECT ${LIST_COLUMNS}, email, address, emergency_contact_name, emergency_contact_phone, blood_group,

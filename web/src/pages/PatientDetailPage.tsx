@@ -72,6 +72,13 @@ export function PatientDetailPage() {
         <dt>Notes</dt>
         <dd className="prewrap">{h.notes ?? '—'}</dd>
       </dl>
+      <h2>Visit summary</h2>
+      <dl className="details" aria-label="Visit summary">
+        <dt>Completed</dt>
+        <dd>{p.visit_summary.completed}</dd>
+        <dt>No-show</dt>
+        <dd>{p.visit_summary.no_show}</dd>
+      </dl>
       <h2>Appointments</h2>
       <AppointmentTable items={p.appointments} hide="patient" />
     </section>
