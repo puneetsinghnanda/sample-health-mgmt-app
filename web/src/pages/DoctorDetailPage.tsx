@@ -9,6 +9,11 @@ import { useAsync } from '../hooks/useAsync';
 import { useSettings } from '../hooks/useSettings';
 import { rupees, todayIn, weekdayName } from '../lib/format';
 
+/** HMS-7: the appointment list filtered the way the No-shows count was counted (same as the dashboard tile). */
+export function noShowsQuery(doctorId: number, window: { from: string; to: string }): string {
+  return new URLSearchParams({ doctorId: String(doctorId), status: 'NO_SHOW', from: window.from, to: window.to }).toString();
+}
+
 /** DOC-3 details, DOC-5 delete, DOC-7 flags, APT-10 day schedule. */
 export function DoctorDetailPage() {
   const { id = '' } = useParams();
@@ -62,6 +67,10 @@ export function DoctorDetailPage() {
         <dd>{rupees(d.feePaise)}</dd>
         <dt>Slot length</dt>
         <dd>{d.slotMinutes} minutes</dd>
+        <dt>No-shows (last 30 days)</dt>
+        <dd>
+          <Link to={`/appointments?${noShowsQuery(d.id, d.noShowsWindow)}`}>{d.noShowsLast30Days}</Link>
+        </dd>
       </dl>
 
       <h2>Weekly availability</h2>

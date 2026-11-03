@@ -63,6 +63,10 @@ export interface DoctorDetail extends DoctorSummary {
   /** DOC-7: Scheduled appointments that no longer fit the weekly availability. */
   outsideAvailability: number[];
   appointmentCount: number;
+  /** HMS-7: No-show appointments that start in noShowsWindow (the dashboard's Last 30 days). Read-only. */
+  noShowsLast30Days: number;
+  /** Hospital-local days (YYYY-MM-DD), inclusive, as the appointment list's from/to filters take them. */
+  noShowsWindow: { from: string; to: string };
 }
 
 export interface PatientSummary {
