@@ -2,6 +2,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import type { Page, PatientListItem } from '../api/types';
+import { SettingsProvider } from '../hooks/useSettings';
 import { PatientsPage } from '../pages/PatientsPage';
 
 const BASE = { dateOfBirth: '1990-01-01', age: 36, gender: 'OTHER', phone: '+91 00000 00000', status: 'ACTIVE' as const, registeredAt: '2026-10-01T04:30:00Z' };
@@ -87,6 +88,44 @@ describe('PatientsPage last visit column (HMS-4)', () => {
   it('HMS-4 REQ-8: shows "-" when lastVisitAt is null', async () => {
     show(WITH_VISIT);
     expect((await lastCell('Test Patient 001')).textContent).toBe('-');
+  });
+
+  it('HMS-4 REQ-5: 19:30 UTC on 9 March shows as 10 March at 01:00 in Asia/Kolkata', async () => {
+    show(WITH_VISIT);
+    const shown = (await lastCell('Test Patient 002')).textContent!;
+    expect(shown).toContain('10 Mar 2026');
+    expect(shown).toContain('01:00');
+    expect(shown).not.toContain('09 Mar');
+    expect(shown).not.toContain('19:30');
+  });
+
+  it('HMS-4 REQ-5: 18:15 UTC on 10 March shows as 10 March at 23:45, the same date on both sides', async () => {
+    show({ ...DATA, items: [{ ...DATA.items[0]!, lastVisitAt: '2026-03-10T18:15:00.000Z' }] });
+    const shown = (await lastCell('Test Patient 001')).textContent!;
+    expect(shown).toContain('10 Mar 2026');
+    expect(shown).toContain('23:45');
+  });
+
+  it('HMS-4 REQ-5: an invalid hospital zone falls back to Asia/Kolkata, as Next appointment does', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(WITH_VISIT), { status: 200 })));
+    render(
+      <SettingsProvider value={{ timeZone: 'Not/AZone', currency: 'INR', pageSize: 20 }}>
+        <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+          <PatientsPage />
+        </MemoryRouter>
+      </SettingsProvider>,
+    );
+    const shown = (await lastCell('Test Patient 002')).textContent!;
+    expect(shown).toContain('10 Mar 2026');
+    expect(shown).toContain('01:00');
+  });
+
+  it('HMS-4 REQ-14, REQ-15: the Last visit header is plain text with no sort control', async () => {
+    show(WITH_VISIT);
+    const header = await screen.findByRole('columnheader', { name: 'Last visit' });
+    expect(within(header).queryByRole('button')).toBeNull();
+    expect(within(header).queryByRole('link')).toBeNull();
+    expect(header.getAttribute('aria-sort')).toBeNull();
   });
 });
 
