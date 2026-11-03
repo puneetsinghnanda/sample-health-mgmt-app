@@ -2,6 +2,7 @@ import type { AppConfig } from '../config';
 import { inTransaction, type Database, type Queryable } from '../db';
 import { formatCode, idFromCode } from '../lib/codes';
 import { conflict, fieldError, notFound, pgError } from '../lib/errors';
+import { lastDays } from '../lib/periods';
 import { availabilityProblem, daySlots, withinAvailability } from '../lib/slots';
 import { dayBounds, localDay } from '../lib/time';
 import { Fields } from '../lib/validate';
@@ -67,7 +68,13 @@ export class DoctorService {
     const outsideAvailability = upcoming
       .filter((a) => !withinAvailability(availability, new Date(a.startsAt), new Date(a.endsAt), this.config.timeZone))
       .map((a) => a.id);
-    return { ...doctor, availability, upcoming, outsideAvailability, appointmentCount: await repo.appointmentCount(id) };
+    // HMS-7: same window and rule as the dashboard's No-shows tile for Last 30 days ('30d').
+    const window = lastDays(this.clock(), this.config.timeZone, 30);
+    const noShowsLast30Days = await new AppointmentRepo(this.db).countByDoctor(id, 'NO_SHOW', window.start, window.end);
+    return {
+      ...doctor, availability, upcoming, outsideAvailability, appointmentCount: await repo.appointmentCount(id),
+      noShowsLast30Days, noShowsWindow: { from: window.from, to: window.to },
+    };
   }
 
   /** DOC-1. */

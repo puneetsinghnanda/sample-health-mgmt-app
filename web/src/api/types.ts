@@ -60,6 +60,8 @@ export interface DoctorDetail extends DoctorSummary {
   upcoming: AppointmentSummary[];
   outsideAvailability: number[];
   appointmentCount: number;
+  noShowsLast30Days: number;
+  noShowsWindow: { from: string; to: string };
 }
 
 export interface PatientSummary {

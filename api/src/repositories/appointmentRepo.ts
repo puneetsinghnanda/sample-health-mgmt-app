@@ -133,6 +133,16 @@ export class AppointmentRepo {
     return new Map(rows.map((r) => [r.doctor_id, Number(r.n)]));
   }
 
+  /** HMS-7: one doctor's appointments with `status` that start in [from, to). */
+  async countByDoctor(doctorId: number, status: AppointmentStatus, from: Date, to: Date): Promise<number> {
+    const { rows } = await this.db.query<{ n: string }>(
+      `SELECT count(*) AS n FROM appointment
+        WHERE doctor_id = $1 AND status = $2 AND starts_at >= $3 AND starts_at < $4`,
+      [doctorId, status, from, to],
+    );
+    return Number(rows[0]?.n ?? 0);
+  }
+
   async insert(a: NewAppointment, actor: string): Promise<number> {
     const { rows } = await this.db.query<{ id: number }>(
       `INSERT INTO appointment (doctor_id, patient_id, starts_at, ends_at, reason, created_by, updated_by)

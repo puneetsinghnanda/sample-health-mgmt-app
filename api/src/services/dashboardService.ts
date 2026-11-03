@@ -1,6 +1,7 @@
 import type { AppConfig } from '../config';
 import type { Database } from '../db';
-import { addDays, dayBounds, localDay } from '../lib/time';
+import { lastDays } from '../lib/periods';
+import { dayBounds } from '../lib/time';
 import { Fields } from '../lib/validate';
 import { SUMMARY_SELECT, toSummary } from '../repositories/appointmentRepo';
 import type { AppointmentSummary } from '../types';
@@ -38,10 +39,11 @@ export class DashboardService {
     f.done();
     const tz = this.config.timeZone;
     const now = this.clock();
-    const today = localDay(now, tz);
-    const from = addDays(today, 1 - PERIOD_DAYS[name]);
+    const window = lastDays(now, tz, PERIOD_DAYS[name]);
+    const today = window.to;
+    const from = window.from;
     const todayBounds = dayBounds(today, tz);
-    const periodStart = dayBounds(from, tz).start;
+    const periodStart = window.start;
     const { rows } = await this.db.query<Record<string, string>>(
       `SELECT
          (SELECT count(*) FROM patient WHERE status = 'ACTIVE') AS patients,
