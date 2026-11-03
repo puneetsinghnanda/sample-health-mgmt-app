@@ -121,6 +121,18 @@ export class AppointmentRepo {
     ).rows.map(toSummary);
   }
 
+  /** HMS-6: per doctor, the appointments that start in [from, to), except cancelled ones. */
+  async countTodayByDoctor(doctorIds: number[], from: Date, to: Date): Promise<Map<number, number>> {
+    if (doctorIds.length === 0) return new Map();
+    const { rows } = await this.db.query<{ doctor_id: number; n: string }>(
+      `SELECT doctor_id, count(*) AS n FROM appointment
+        WHERE doctor_id = ANY($1::int[]) AND starts_at >= $2 AND starts_at < $3 AND status <> 'CANCELLED'
+        GROUP BY doctor_id`,
+      [doctorIds, from, to],
+    );
+    return new Map(rows.map((r) => [r.doctor_id, Number(r.n)]));
+  }
+
   async insert(a: NewAppointment, actor: string): Promise<number> {
     const { rows } = await this.db.query<{ id: number }>(
       `INSERT INTO appointment (doctor_id, patient_id, starts_at, ends_at, reason, created_by, updated_by)

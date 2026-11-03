@@ -42,6 +42,11 @@ export interface DoctorSummary {
   status: RecordStatus;
 }
 
+/** HMS-6: a doctors-list row with the doctor's appointments that start today, except cancelled ones. */
+export interface DoctorListRow extends DoctorSummary {
+  today_count: number;
+}
+
 export interface AppointmentSummary {
   id: number;
   code: string;

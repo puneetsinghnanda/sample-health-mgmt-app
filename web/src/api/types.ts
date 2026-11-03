@@ -41,6 +41,10 @@ export interface DoctorSummary {
   status: RecordStatus;
 }
 
+export interface DoctorListRow extends DoctorSummary {
+  today_count: number;
+}
+
 export interface AppointmentSummary {
   id: number;
   code: string;
