@@ -54,12 +54,12 @@ describe('DoctorsPage Today column (HMS-6)', () => {
     expect(doctorsCall).toContain('with_today=true');
   });
 
-  it("HMS-6 REQ-6, REQ-7: the count links to that doctor's appointments today", async () => {
+  it("HMS-6 REQ-6, REQ-7, HMS-8 REQ-9: the count links to that doctor's appointments today, except Cancelled", async () => {
     renderPage();
     const link = within(await todayCell('Test Doctor 001')).getByRole('link');
     const today = todayIn('Asia/Kolkata');
     expect(link.textContent).toBe('3');
-    expect(link.getAttribute('href')).toBe(`/appointments?doctorId=1&from=${today}&to=${today}`);
+    expect(link.getAttribute('href')).toBe(`/appointments?doctorId=1&status=NOT_CANCELLED&from=${today}&to=${today}`);
   });
 
   it('HMS-6 REQ-5: a doctor with no appointments today shows 0, still linked', async () => {

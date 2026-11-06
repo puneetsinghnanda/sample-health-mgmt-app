@@ -83,7 +83,7 @@ export function DoctorsPage() {
                   <td>{d.department.name}</td>
                   <td>{rupees(d.feePaise)}</td>
                   <td><StatusBadge status={d.status} /></td>
-                  <td><Link to={`/appointments${query({ doctorId: d.id, from: today, to: today })}`}>{d.today_count}</Link></td>
+                  <td><Link to={`/appointments${query({ doctorId: d.id, status: 'NOT_CANCELLED', from: today, to: today })}`}>{d.today_count}</Link></td>
                 </tr>
               ))}
             </tbody>

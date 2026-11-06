@@ -32,7 +32,8 @@ export class AppointmentService {
     };
     const doctorId = id('doctorId');
     const patientId = id('patientId');
-    const status = f.oneOf('status', APPOINTMENT_STATUSES);
+    // HMS-8: NOT_CANCELLED lists every status except Cancelled (the doctors list's Today rule).
+    const status = f.oneOf('status', [...APPOINTMENT_STATUSES, 'NOT_CANCELLED'] as const);
     const from = f.day('from');
     const to = f.day('to');
     if (from && to && from > to) f.fail('to', 'must not be before from');
