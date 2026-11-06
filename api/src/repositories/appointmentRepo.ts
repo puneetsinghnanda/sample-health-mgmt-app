@@ -40,7 +40,8 @@ export function toSummary(r: SummaryRow): AppointmentSummary {
 export interface AppointmentFilter {
   doctorId?: number;
   patientId?: number;
-  status?: AppointmentStatus;
+  /** HMS-8: NOT_CANCELLED means every status except CANCELLED. */
+  status?: AppointmentStatus | 'NOT_CANCELLED';
   from?: Date;
   to?: Date;
   limit: number;
@@ -67,7 +68,9 @@ export class AppointmentRepo {
     };
     if (f.doctorId !== undefined) add('a.doctor_id = ?', f.doctorId);
     if (f.patientId !== undefined) add('a.patient_id = ?', f.patientId);
-    if (f.status !== undefined) add('a.status = ?', f.status);
+    // Same fixed condition as countTodayByDoctor; nothing from the request goes into the SQL text.
+    if (f.status === 'NOT_CANCELLED') where.push("a.status <> 'CANCELLED'");
+    else if (f.status !== undefined) add('a.status = ?', f.status);
     if (f.from !== undefined) add('a.starts_at >= ?', f.from);
     if (f.to !== undefined) add('a.starts_at < ?', f.to);
     const clause = where.length ? `WHERE ${where.join(' AND ')}` : '';

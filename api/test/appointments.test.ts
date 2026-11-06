@@ -95,6 +95,12 @@ describe.skipIf(!pgAvailable())('appointment management (PRD §4.3)', () => {
     expect((await request(app).get('/api/appointments?from=2026-10-20&to=2026-10-19')).status).toBe(400);
   });
 
+  it('HMS-8 REQ-8: any other status value is a 400 on status', async () => {
+    const res = await request(app).get('/api/appointments?status=NOT_A_STATUS');
+    expect(res.status).toBe(400);
+    expect(res.body.error.fields.status).toMatch(/NOT_CANCELLED/);
+  });
+
   it('APT-10: shows a doctor’s day with booked and free slots', async () => {
     const day = (await request(app).get(`/api/doctors/1/slots?date=${TUESDAY}`)).body;
     const ten = day.slots.find((s: { label: string }) => s.label === '10:00');
@@ -109,5 +115,58 @@ describe.skipIf(!pgAvailable())('appointment management (PRD §4.3)', () => {
     expect(history.map((e: { event: string }) => e.event)).toEqual(['BOOKED', 'RESCHEDULED', 'CANCELLED']);
     expect(history.every((e: { actor: string; at: string }) => e.actor === 'staff' && !Number.isNaN(Date.parse(e.at)))).toBe(true);
     expect(history[2].note).toBe('Patient requested');
+  });
+});
+
+describe.skipIf(!pgAvailable())('HMS-8 Any except Cancelled (status=NOT_CANCELLED)', () => {
+  let db: TestDb;
+  let app: Express;
+  const WEDNESDAY = '2026-10-21';
+  beforeAll(async () => {
+    db = await freshDatabase();
+    app = testApp(db.pool);
+    await loadFixture(app);
+  });
+  afterAll(async () => {
+    await db.drop();
+  });
+
+  /** Inserts a row directly, so closed statuses and off-grid times can be set up without the booking rules. */
+  async function row(doctorId: number, patientId: number, startsAt: string, status: string): Promise<number> {
+    const ends = new Date(Date.parse(startsAt) + 15 * 60_000).toISOString();
+    const res = await db.pool.query<{ id: number }>(
+      `INSERT INTO appointment (doctor_id, patient_id, starts_at, ends_at, status, cancellation_reason, created_by, updated_by)
+       VALUES ($1, $2, $3, $4, $5, $6, 'staff', 'staff') RETURNING id`,
+      [doctorId, patientId, startsAt, ends, status, status === 'CANCELLED' ? 'Test reason' : null],
+    );
+    return res.rows[0]!.id;
+  }
+
+  it('HMS-8 REQ-7, REQ-8: lists Scheduled, Completed and No-show but not Cancelled, even when Cancelled starts last', async () => {
+    const scheduled = await row(2, 1, at(WEDNESDAY, '09:00'), 'SCHEDULED');
+    const completed = await row(2, 2, at(WEDNESDAY, '09:30'), 'COMPLETED');
+    const noShow = await row(2, 1, at(WEDNESDAY, '10:00'), 'NO_SHOW');
+    await row(2, 2, at(WEDNESDAY, '11:00'), 'CANCELLED');
+    const res = await request(app).get(`/api/appointments?doctorId=2&status=NOT_CANCELLED&from=${WEDNESDAY}&to=${WEDNESDAY}`);
+    expect(res.status).toBe(200);
+    expect(res.body.items.map((a: { id: number }) => a.id)).toEqual([scheduled, completed, noShow]);
+    expect(res.body.total).toBe(3);
+    const any = await request(app).get(`/api/appointments?doctorId=2&from=${WEDNESDAY}&to=${WEDNESDAY}`);
+    expect(any.body.total).toBe(4);
+  });
+
+  it("HMS-8 REQ-9, REQ-10: today's NOT_CANCELLED list equals the doctors list's Today count, including 00:30 local", async () => {
+    // Asia/Kolkata = UTC+05:30, so 00:30 local on MONDAY is 19:00 UTC on the previous UTC date.
+    const early = await row(1, 1, at(MONDAY, '00:30'), 'SCHEDULED');
+    expect(new Date(at(MONDAY, '00:30')).toISOString()).toBe('2026-10-18T19:00:00.000Z');
+    const nine = await row(1, 2, at(MONDAY, '09:00'), 'SCHEDULED');
+    await row(1, 1, at(MONDAY, '09:15'), 'CANCELLED');
+    await row(1, 2, at('2026-10-18', '23:45'), 'SCHEDULED'); // the evening before: not today
+    const doctors = (await request(app).get('/api/doctors?with_today=true')).body;
+    const todayCount = doctors.items.find((d: { id: number }) => d.id === 1).today_count;
+    const list = (await request(app).get(`/api/appointments?doctorId=1&status=NOT_CANCELLED&from=${MONDAY}&to=${MONDAY}`)).body;
+    expect(todayCount).toBe(2);
+    expect(list.total).toBe(todayCount);
+    expect(list.items.map((a: { id: number }) => a.id)).toEqual([early, nine]);
   });
 });
