@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
 import { AppointmentTable } from '../components/AppointmentTable';
 import { ErrorBanner } from '../components/ErrorBanner';
@@ -14,12 +14,25 @@ export function noShowsQuery(doctorId: number, window: { from: string; to: strin
   return new URLSearchParams({ doctorId: String(doctorId), status: 'NO_SHOW', from: window.from, to: window.to }).toString();
 }
 
-/** DOC-3 details, DOC-5 delete, DOC-7 flags, APT-10 day schedule. */
+/** HMS-9: a ?date= value is used only when it is a real calendar day in YYYY-MM-DD form. */
+export function validDay(value: string | null): string | null {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const d = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === value ? value : null;
+}
+
+/** DOC-3 details, DOC-5 delete, DOC-7 flags, APT-10 day schedule, HMS-9 next 7 days. */
 export function DoctorDetailPage() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
   const { timeZone } = useSettings();
-  const [date, setDate] = useState(() => todayIn(timeZone));
+  const [searchParams] = useSearchParams();
+  const urlDate = validDay(searchParams.get('date'));
+  const [date, setDate] = useState(() => urlDate ?? todayIn(timeZone));
+  // HMS-9 REQ-8: following a Next 7 days link on the same page moves the day schedule to that date.
+  useEffect(() => {
+    if (urlDate) setDate(urlDate);
+  }, [urlDate]);
   const [error, setError] = useState<string>();
   const doctor = useAsync(() => api.doctor(id), id);
   const day = useAsync(() => api.schedule(id, date), `${id}:${date}`);
@@ -82,6 +95,38 @@ export function DoctorDetailPage() {
             <li key={i}>{weekdayName(b.weekday)}: {b.start}–{b.end}</li>
           ))}
         </ul>
+      )}
+
+      {d.nextSevenDays && (
+        <>
+          <h2>Next 7 days</h2>
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Date</th>
+                <th scope="col">Booked</th>
+                <th scope="col">Free</th>
+              </tr>
+            </thead>
+            <tbody>
+              {d.nextSevenDays.map((n) => (
+                <tr key={n.date} className="next-day-row">
+                  <td>
+                    <Link to={`/doctors/${d.id}?date=${n.date}`}>{n.date}</Link>
+                  </td>
+                  {n.available ? (
+                    <>
+                      <td>{n.booked}</td>
+                      <td>{n.free}</td>
+                    </>
+                  ) : (
+                    <td colSpan={2} className="muted">Not available</td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
       )}
 
       <h2>Upcoming appointments</h2>

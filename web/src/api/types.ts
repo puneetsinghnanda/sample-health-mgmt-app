@@ -62,6 +62,16 @@ export interface DoctorDetail extends DoctorSummary {
   appointmentCount: number;
   noShowsLast30Days: number;
   noShowsWindow: { from: string; to: string };
+  /** HMS-9: null when the doctor is Inactive. */
+  nextSevenDays: NextDay[] | null;
+}
+
+/** HMS-9: one day of the doctor's next 7 days. booked and free are null when the day has no slots. */
+export interface NextDay {
+  date: string;
+  available: boolean;
+  booked: number | null;
+  free: number | null;
 }
 
 export interface PatientSummary {

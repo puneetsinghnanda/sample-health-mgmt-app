@@ -12,7 +12,7 @@ const DOCTOR: DoctorDetail = {
   department: { id: 1, name: 'Test Department 001', status: 'ACTIVE' },
   phone: '+91 00000 00000', email: null, feePaise: 50000, slotMinutes: 15, status: 'ACTIVE',
   availability: [], upcoming: [], outsideAvailability: [], appointmentCount: 4,
-  noShowsLast30Days: 3, noShowsWindow: WINDOW,
+  noShowsLast30Days: 3, noShowsWindow: WINDOW, nextSevenDays: null,
 };
 
 function renderPage(doctor: DoctorDetail) {
