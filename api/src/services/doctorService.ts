@@ -4,13 +4,13 @@ import { formatCode, idFromCode } from '../lib/codes';
 import { conflict, fieldError, notFound, pgError } from '../lib/errors';
 import { lastDays } from '../lib/periods';
 import { availabilityProblem, daySlots, withinAvailability } from '../lib/slots';
-import { dayBounds, localDay } from '../lib/time';
+import { addDays, dayBounds, localDay } from '../lib/time';
 import { Fields } from '../lib/validate';
 import { AppointmentRepo } from '../repositories/appointmentRepo';
 import { DoctorRepo, type DoctorFields } from '../repositories/doctorRepo';
 import {
   RECORD_STATUSES, SLOT_MINUTES, type AppointmentSummary, type AvailabilityBlock, type DoctorDetail,
-  type DoctorListRow, type DoctorSummary, type Page, type RecordStatus,
+  type DoctorListRow, type DoctorSummary, type NextDay, type Page, type RecordStatus,
 } from '../types';
 
 export interface DaySchedule {
@@ -71,9 +71,11 @@ export class DoctorService {
     // HMS-7: same window and rule as the dashboard's No-shows tile for Last 30 days ('30d').
     const window = lastDays(this.clock(), this.config.timeZone, 30);
     const noShowsLast30Days = await new AppointmentRepo(this.db).countByDoctor(id, 'NO_SHOW', window.start, window.end);
+    // HMS-9: Inactive doctors get no next-7-days summary.
+    const nextSevenDays = doctor.status === 'INACTIVE' ? null : await this.nextSevenDays(id, doctor.slotMinutes, availability);
     return {
       ...doctor, availability, upcoming, outsideAvailability, appointmentCount: await repo.appointmentCount(id),
-      noShowsLast30Days, noShowsWindow: { from: window.from, to: window.to },
+      noShowsLast30Days, noShowsWindow: { from: window.from, to: window.to }, nextSevenDays,
     };
   }
 
@@ -146,12 +148,40 @@ export class DoctorService {
     const { start, end } = dayBounds(date, tz);
     const appointments = await new AppointmentRepo(this.db).occupyingBetween(id, start, end);
     const now = this.clock().getTime();
-    const slots = daySlots(await repo.availability(id), doctor.slotMinutes, date, tz).map((s) => {
+    const slots = this.slotStates(await repo.availability(id), doctor.slotMinutes, date, appointments, now).map(({ s, state, taken }) => (
+      { start: s.start.toISOString(), end: s.end.toISOString(), label: s.label, state, ...(taken ? { appointment: taken } : {}) }
+    ));
+    return { doctorId: id, date, slotMinutes: doctor.slotMinutes, slots, appointments };
+  }
+
+  /** APT-10 / HMS-9: the one slot-state rule shared by the day schedule and the next 7 days. */
+  private slotStates(blocks: AvailabilityBlock[], slotMinutes: number, date: string, appointments: AppointmentSummary[], now: number) {
+    return daySlots(blocks, slotMinutes, date, this.config.timeZone).map((s) => {
       const taken = appointments.find((a) => Date.parse(a.startsAt) < s.end.getTime() && Date.parse(a.endsAt) > s.start.getTime());
       const state: 'FREE' | 'BOOKED' | 'PAST' = taken ? 'BOOKED' : s.start.getTime() <= now ? 'PAST' : 'FREE';
-      return { start: s.start.toISOString(), end: s.end.toISOString(), label: s.label, state, ...(taken ? { appointment: taken } : {}) };
+      return { s, state, taken };
     });
-    return { doctorId: id, date, slotMinutes: doctor.slotMinutes, slots, appointments };
+  }
+
+  /** HMS-9: today to 6 days ahead in the hospital zone, counted exactly as the day schedule shows each day. */
+  private async nextSevenDays(id: number, slotMinutes: number, blocks: AvailabilityBlock[]): Promise<NextDay[]> {
+    const tz = this.config.timeZone;
+    const now = this.clock();
+    const today = localDay(now, tz);
+    const days = Array.from({ length: 7 }, (_, i) => addDays(today, i));
+    const { start } = dayBounds(days[0]!, tz);
+    const { end } = dayBounds(days[days.length - 1]!, tz);
+    const appointments = await new AppointmentRepo(this.db).occupyingBetween(id, start, end);
+    return days.map((date) => {
+      const states = this.slotStates(blocks, slotMinutes, date, appointments, now.getTime());
+      if (states.length === 0) return { date, available: false, booked: null, free: null };
+      return {
+        date,
+        available: true,
+        booked: states.filter((x) => x.state === 'BOOKED').length,
+        free: states.filter((x) => x.state === 'FREE').length,
+      };
+    });
   }
 
   private read(body: Record<string, unknown>, partial: boolean): Partial<DoctorFields> {

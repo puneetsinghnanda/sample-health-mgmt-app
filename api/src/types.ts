@@ -67,6 +67,16 @@ export interface DoctorDetail extends DoctorSummary {
   noShowsLast30Days: number;
   /** Hospital-local days (YYYY-MM-DD), inclusive, as the appointment list's from/to filters take them. */
   noShowsWindow: { from: string; to: string };
+  /** HMS-9: today to 6 days ahead (hospital-local), counted like the day schedule. Null when Inactive. Read-only. */
+  nextSevenDays: NextDay[] | null;
+}
+
+/** HMS-9: one day of the doctor's next 7 days. booked and free are null when the day has no slots. */
+export interface NextDay {
+  date: string;
+  available: boolean;
+  booked: number | null;
+  free: number | null;
 }
 
 export interface PatientSummary {
