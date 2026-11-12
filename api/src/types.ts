@@ -79,6 +79,16 @@ export interface NextDay {
   free: number | null;
 }
 
+/** HMS-11: one Active doctor of a specialization with their earliest FREE slot, now to the end of today+6. */
+export interface EarliestSlotEntry {
+  id: number;
+  code: string;
+  fullName: string;
+  departmentName: string;
+  /** date: hospital-local YYYY-MM-DD; start: UTC ISO instant; label: hospital-local HH:MM. Null when none is free. */
+  slot: { date: string; start: string; label: string } | null;
+}
+
 export interface PatientSummary {
   id: number;
   code: string;

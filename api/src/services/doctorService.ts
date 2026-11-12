@@ -1,7 +1,7 @@
 import type { AppConfig } from '../config';
 import { inTransaction, type Database, type Queryable } from '../db';
 import { formatCode, idFromCode } from '../lib/codes';
-import { conflict, fieldError, notFound, pgError } from '../lib/errors';
+import { badRequest, conflict, fieldError, notFound, pgError } from '../lib/errors';
 import { lastDays } from '../lib/periods';
 import { availabilityProblem, daySlots, withinAvailability } from '../lib/slots';
 import { addDays, dayBounds, localDay } from '../lib/time';
@@ -10,7 +10,7 @@ import { AppointmentRepo } from '../repositories/appointmentRepo';
 import { DoctorRepo, type DoctorFields } from '../repositories/doctorRepo';
 import {
   RECORD_STATUSES, SLOT_MINUTES, type AppointmentSummary, type AvailabilityBlock, type DoctorDetail,
-  type DoctorListRow, type DoctorSummary, type NextDay, type Page, type RecordStatus,
+  type DoctorListRow, type DoctorSummary, type EarliestSlotEntry, type NextDay, type Page, type RecordStatus,
 } from '../types';
 
 export interface DaySchedule {
@@ -20,6 +20,16 @@ export interface DaySchedule {
   slots: Array<{ start: string; end: string; label: string; state: 'FREE' | 'BOOKED' | 'PAST'; appointment?: AppointmentSummary }>;
   /** Every non-cancelled appointment of the day, including any that no longer sit on the slot grid. */
   appointments: AppointmentSummary[];
+}
+
+/** HMS-11: slot start, earliest first; then name ignoring case; then id. Entries without a slot come last. */
+function byEarliestSlot(a: EarliestSlotEntry, b: EarliestSlotEntry): number {
+  if (a.slot && b.slot && a.slot.start !== b.slot.start) return a.slot.start < b.slot.start ? -1 : 1;
+  if (!a.slot !== !b.slot) return a.slot ? -1 : 1;
+  const an = a.fullName.toLowerCase();
+  const bn = b.fullName.toLowerCase();
+  if (an !== bn) return an < bn ? -1 : 1;
+  return a.id - b.id;
 }
 
 /** PRD §4.1, DOC-1..7, and the day schedule of APT-10. */
@@ -152,6 +162,40 @@ export class DoctorService {
       { start: s.start.toISOString(), end: s.end.toISOString(), label: s.label, state, ...(taken ? { appointment: taken } : {}) }
     ));
     return { doctorId: id, date, slotMinutes: doctor.slotMinutes, slots, appointments };
+  }
+
+  /**
+   * HMS-11: each Active doctor of a specialization with their earliest FREE slot from now to the end of today+6
+   * (hospital zone), by the same slot-state rule as the day schedule. Unpaged; entries carry no contact data.
+   */
+  async earliestSlots(specializationId: number): Promise<{ items: EarliestSlotEntry[] }> {
+    const repo = new DoctorRepo(this.db);
+    const status = await repo.refStatus('specialization', specializationId);
+    if (status === null) throw notFound(`Specialization ${specializationId} not found`);
+    if (status !== 'ACTIVE') throw badRequest('specialization is Inactive');
+    const tz = this.config.timeZone;
+    const now = this.clock();
+    const today = localDay(now, tz);
+    const days = Array.from({ length: 7 }, (_, i) => addDays(today, i));
+    const { start } = dayBounds(days[0]!, tz);
+    const { end } = dayBounds(days[days.length - 1]!, tz);
+    const appointmentRepo = new AppointmentRepo(this.db);
+    const items: EarliestSlotEntry[] = [];
+    for (const doctor of await repo.activeBySpecialization(specializationId)) {
+      const blocks = await repo.availability(doctor.id);
+      // occupyingBetween leaves out Cancelled appointments, so their slots count as FREE again.
+      const appointments = await appointmentRepo.occupyingBetween(doctor.id, start, end);
+      let slot: EarliestSlotEntry['slot'] = null;
+      for (const date of days) {
+        const free = this.slotStates(blocks, doctor.slotMinutes, date, appointments, now.getTime()).find((x) => x.state === 'FREE');
+        if (free) {
+          slot = { date, start: free.s.start.toISOString(), label: free.s.label };
+          break;
+        }
+      }
+      items.push({ id: doctor.id, code: formatCode('D', doctor.id), fullName: doctor.fullName, departmentName: doctor.departmentName, slot });
+    }
+    return { items: items.sort(byEarliestSlot) };
   }
 
   /** APT-10 / HMS-9: the one slot-state rule shared by the day schedule and the next 7 days. */

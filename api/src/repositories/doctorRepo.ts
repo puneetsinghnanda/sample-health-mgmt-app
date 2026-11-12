@@ -164,6 +164,21 @@ export class DoctorRepo {
     ).rows.map(toSummary);
   }
 
+  /** HMS-11: Active doctors of one specialization, unpaged, with only the columns the earliest-slot entries need. */
+  async activeBySpecialization(
+    specializationId: number,
+  ): Promise<Array<{ id: number; fullName: string; departmentName: string; slotMinutes: number }>> {
+    const { rows } = await this.db.query<{ id: number; full_name: string; department_name: string; slot_minutes: number }>(
+      `SELECT d.id, d.full_name, dp.name AS department_name, d.slot_minutes
+         FROM doctor d
+         JOIN department dp ON dp.id = d.department_id
+        WHERE d.specialization_id = $1 AND d.status = 'ACTIVE'
+        ORDER BY lower(d.full_name), d.id`,
+      [specializationId],
+    );
+    return rows.map((r) => ({ id: r.id, fullName: r.full_name, departmentName: r.department_name, slotMinutes: r.slot_minutes }));
+  }
+
   async refStatus(kind: 'department' | 'specialization', id: number): Promise<string | null> {
     return (await this.db.query<{ status: string }>(`SELECT status FROM ${kind} WHERE id = $1`, [id])).rows[0]?.status ?? null;
   }
