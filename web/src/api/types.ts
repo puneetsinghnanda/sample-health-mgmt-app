@@ -115,6 +115,10 @@ export interface AppointmentDetail extends AppointmentSummary {
   reason: string | null;
   cancellationReason: string | null;
   history: Array<{ event: string; fromStartsAt: string | null; toStartsAt: string | null; note: string | null; actor: string; at: string }>;
+  /** HMS-13: the doctor's current status. */
+  doctorStatus: RecordStatus;
+  /** HMS-13: true only for a not-yet-started Scheduled appointment outside the doctor's weekly availability. */
+  outsideAvailability: boolean;
 }
 
 export interface Slot {

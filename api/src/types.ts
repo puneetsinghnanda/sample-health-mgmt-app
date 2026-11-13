@@ -129,4 +129,8 @@ export interface AppointmentDetail extends AppointmentSummary {
   reason: string | null;
   cancellationReason: string | null;
   history: AppointmentEvent[];
+  /** HMS-13: the doctor's current status, so the page can warn when the doctor is Inactive. */
+  doctorStatus: RecordStatus;
+  /** HMS-13: true only for a not-yet-started Scheduled appointment outside the doctor's weekly availability (DOC-7 rule); otherwise false. */
+  outsideAvailability: boolean;
 }

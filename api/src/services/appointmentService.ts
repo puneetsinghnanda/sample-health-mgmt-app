@@ -2,7 +2,7 @@ import type { AppConfig } from '../config';
 import { inTransaction, type Database, type Queryable } from '../db';
 import { formatCode } from '../lib/codes';
 import { conflict, fieldError, notFound, pgError } from '../lib/errors';
-import { isSlot } from '../lib/slots';
+import { isSlot, withinAvailability } from '../lib/slots';
 import { dayBounds, MINUTE } from '../lib/time';
 import { Fields } from '../lib/validate';
 import { AppointmentRepo } from '../repositories/appointmentRepo';
@@ -51,10 +51,21 @@ export class AppointmentService {
     return { items, page, page_size: size, total };
   }
 
+  /** HMS-13: the detail also carries the doctor's status and the DOC-7 availability check. */
   async get(id: number): Promise<AppointmentDetail> {
     const detail = await new AppointmentRepo(this.db).detail(id);
     if (!detail) throw notFound(`Appointment ${formatCode('A', id)} not found`);
-    return detail;
+    const doctors = new DoctorRepo(this.db);
+    // Doctors with appointments are never deleted (DOC-5), so the doctor exists, as in reschedule.
+    const doctor = (await doctors.get(detail.doctor.id))!;
+    const startsAt = new Date(detail.startsAt);
+    // Same rule and window as the doctor page's DOC-7 flags (Scheduled, not started yet), without its list cap.
+    const outsideAvailability =
+      detail.status === 'SCHEDULED' &&
+      startsAt.getTime() >= this.clock().getTime() &&
+      !withinAvailability(await doctors.availability(doctor.id), startsAt, new Date(detail.endsAt), this.config.timeZone);
+    // Only the status is copied from the doctor record; no other doctor field enters the response.
+    return { ...detail, doctorStatus: doctor.status, outsideAvailability };
   }
 
   /** APT-1..4. */
