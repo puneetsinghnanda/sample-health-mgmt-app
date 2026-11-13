@@ -69,6 +69,17 @@ export function AppointmentDetailPage() {
         )}
       </dl>
 
+      {scheduled && a.outsideAvailability && (
+        <p className="warning" role="status">
+          This appointment is outside the doctor's current availability. Reschedule or cancel it.
+        </p>
+      )}
+      {scheduled && a.doctorStatus === 'INACTIVE' && (
+        <p className="warning" role="status">
+          The doctor is Inactive. Cancel this appointment or book the patient with another doctor.
+        </p>
+      )}
+
       {scheduled ? (
         <div className="actions">
           <button type="button" onClick={() => setMode('reschedule')}>Reschedule</button>

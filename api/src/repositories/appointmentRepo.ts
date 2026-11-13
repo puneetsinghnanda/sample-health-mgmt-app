@@ -88,7 +88,8 @@ export class AppointmentRepo {
     return (await this.db.query<DetailRow>(`${SUMMARY_SELECT} WHERE a.id = $1${lock}`, [id])).rows[0] ?? null;
   }
 
-  async detail(id: number): Promise<AppointmentDetail | null> {
+  /** The stored part of the detail; AppointmentService.get adds doctorStatus and outsideAvailability (HMS-13). */
+  async detail(id: number): Promise<Omit<AppointmentDetail, 'doctorStatus' | 'outsideAvailability'> | null> {
     const row = await this.get(id);
     if (!row) return null;
     const history = (
