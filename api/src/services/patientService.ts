@@ -39,7 +39,7 @@ export class PatientService {
     const repo = new PatientRepo(this.db);
     const patient = await repo.get(id, this.today());
     if (!patient) throw notFound(`Patient ${formatCode('P', id)} not found`);
-    return { ...patient, appointments: await repo.appointments(id, this.clock()) };
+    return { ...patient, visitSummary: await repo.visitSummary(id), appointments: await repo.appointments(id, this.clock()) };
   }
 
   /** PAT-1, with the PAT-5 duplicate warning unless the caller confirms. */
