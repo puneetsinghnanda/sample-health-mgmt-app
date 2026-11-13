@@ -113,6 +113,8 @@ export interface PatientDetail extends PatientSummary {
     currentMedications: string[];
     notes: string | null;
   };
+  /** HMS-5: all-time counts of the patient's COMPLETED and NO_SHOW appointments. */
+  visitSummary: { completed: number; noShow: number };
   appointments: AppointmentSummary[];
 }
 
