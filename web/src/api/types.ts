@@ -108,6 +108,7 @@ export interface PatientDetail extends PatientSummary {
     currentMedications: string[];
     notes: string | null;
   };
+  visitSummary: { completed: number; noShow: number };
   appointments: AppointmentSummary[];
 }
 

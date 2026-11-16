@@ -145,7 +145,7 @@ export class PatientRepo {
     };
   }
 
-  async get(id: number, today: string, forUpdate = false): Promise<Omit<PatientDetail, 'appointments'> | null> {
+  async get(id: number, today: string, forUpdate = false): Promise<Omit<PatientDetail, 'appointments' | 'visitSummary'> | null> {
     const r = (
       await this.db.query<DetailRow>(
         `SELECT ${LIST_COLUMNS}, email, address, emergency_contact_name, emergency_contact_phone, blood_group,
@@ -215,6 +215,19 @@ export class PatientRepo {
     return Number(
       (await this.db.query<{ n: string }>('SELECT count(*) AS n FROM appointment WHERE patient_id = $1', [id])).rows[0]?.n ?? 0,
     );
+  }
+
+  /** HMS-5: all-time counts by closed status; SCHEDULED and CANCELLED count as neither. */
+  async visitSummary(id: number): Promise<PatientDetail['visitSummary']> {
+    const r = (
+      await this.db.query<{ completed: string; no_show: string }>(
+        `SELECT count(*) FILTER (WHERE status = 'COMPLETED') AS completed,
+                count(*) FILTER (WHERE status = 'NO_SHOW') AS no_show
+           FROM appointment WHERE patient_id = $1`,
+        [id],
+      )
+    ).rows[0];
+    return { completed: Number(r?.completed ?? 0), noShow: Number(r?.no_show ?? 0) };
   }
 
   /** PAT-3: upcoming first (soonest first), then past (most recent first). */
