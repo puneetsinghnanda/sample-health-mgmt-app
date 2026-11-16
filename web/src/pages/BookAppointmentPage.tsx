@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, ApiError } from '../api/client';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { Field } from '../components/Field';
@@ -15,13 +15,18 @@ const numberOrUndefined = (v: string | null) => (v ? Number(v) : undefined);
 export function BookAppointmentPage() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { timeZone } = useSettings();
   const [doctorId, setDoctorId] = useState(numberOrUndefined(params.get('doctorId')));
   const [patientId, setPatientId] = useState(numberOrUndefined(params.get('patientId')));
   const [labels, setLabels] = useState({ doctor: '', patient: '' });
   const [date, setDate] = useState(params.get('date') ?? todayIn(timeZone));
   const [start, setStart] = useState<string | undefined>(params.get('start') ?? undefined);
-  const [reason, setReason] = useState('');
+  // HMS-14: Book again hands the original's reason over in navigation state, not the URL.
+  const [reason, setReason] = useState(() => {
+    const given = (location.state as { reason?: unknown } | null)?.reason;
+    return typeof given === 'string' ? given.slice(0, 300) : '';
+  });
   const [fields, setFields] = useState<Record<string, string>>({});
   const [error, setError] = useState<string>();
   const [saving, setSaving] = useState(false);

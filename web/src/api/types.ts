@@ -114,6 +114,9 @@ export interface PatientDetail extends PatientSummary {
 export interface AppointmentDetail extends AppointmentSummary {
   reason: string | null;
   cancellationReason: string | null;
+  /** HMS-14: doctor's and patient's status, for Book again. */
+  doctor_status: RecordStatus;
+  patient_status: RecordStatus;
   history: Array<{ event: string; fromStartsAt: string | null; toStartsAt: string | null; note: string | null; actor: string; at: string }>;
 }
 

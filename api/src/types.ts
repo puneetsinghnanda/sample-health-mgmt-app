@@ -128,5 +128,8 @@ export interface AppointmentEvent {
 export interface AppointmentDetail extends AppointmentSummary {
   reason: string | null;
   cancellationReason: string | null;
+  /** HMS-14: lets the appointment page disable Book again without loading the doctor or patient record. */
+  doctor_status: RecordStatus;
+  patient_status: RecordStatus;
   history: AppointmentEvent[];
 }
