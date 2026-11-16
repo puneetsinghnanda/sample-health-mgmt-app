@@ -114,6 +114,8 @@ export interface PatientDetail extends PatientSummary {
     notes: string | null;
   };
   appointments: AppointmentSummary[];
+  /** HMS-15: same rule as the patients list (HMS-1). */
+  next_appointment: NextAppointment | null;
 }
 
 export interface AppointmentEvent {
