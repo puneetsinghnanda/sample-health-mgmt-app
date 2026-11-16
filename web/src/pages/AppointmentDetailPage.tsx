@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api/client';
 import type { AppointmentDetail } from '../api/types';
 import { ErrorBanner } from '../components/ErrorBanner';
@@ -18,9 +18,18 @@ const EVENT_LABEL: Record<string, string> = {
   NO_SHOW: 'Marked no-show',
 };
 
-/** APT-5 reschedule, APT-6 cancel, APT-7 complete / no-show, APT-11 history. */
+/** HMS-14: why Book again is disabled; empty when doctor and patient are both Active. */
+export function bookAgainBlockers(a: AppointmentDetail): string[] {
+  return [
+    ...(a.doctor_status !== 'ACTIVE' ? ['Doctor is inactive'] : []),
+    ...(a.patient_status !== 'ACTIVE' ? ['Patient is inactive'] : []),
+  ];
+}
+
+/** APT-5 reschedule, APT-6 cancel, APT-7 complete / no-show, APT-11 history, HMS-14 book again. */
 export function AppointmentDetailPage() {
   const { id = '' } = useParams();
+  const navigate = useNavigate();
   const { timeZone } = useSettings();
   const [version, setVersion] = useState(0);
   const loaded = useAsync(() => api.appointment(id), `${id}:${version}`);
@@ -43,6 +52,15 @@ export function AppointmentDetailPage() {
   const a = loaded.data;
   const scheduled = a.status === 'SCHEDULED';
   const started = Date.parse(a.startsAt) <= Date.now();
+  const canBookAgain = a.status === 'CANCELLED' || a.status === 'NO_SHOW';
+  const blockers = bookAgainBlockers(a);
+
+  function bookAgain() {
+    // The reason travels in navigation state, never in the URL (HMS-14 A-09).
+    navigate(`/appointments/new?doctorId=${a.doctor.id}&patientId=${a.patient.id}`, {
+      state: a.reason ? { reason: a.reason } : undefined,
+    });
+  }
 
   return (
     <section>
@@ -80,6 +98,15 @@ export function AppointmentDetailPage() {
         </div>
       ) : (
         <p className="muted">This appointment is closed and can no longer be changed.</p>
+      )}
+
+      {canBookAgain && (
+        <div className="actions">
+          <button type="button" disabled={blockers.length > 0} title={blockers.join(' · ') || undefined} onClick={bookAgain}>
+            Book again
+          </button>
+          {blockers.map((b) => <small key={b} className="muted">{b}</small>)}
+        </div>
       )}
 
       {mode === 'reschedule' && <Reschedule appointment={a} onDone={(start) => void act(() => api.reschedule(a.id, start))} />}

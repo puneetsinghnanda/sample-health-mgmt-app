@@ -1,6 +1,6 @@
 import type { Queryable } from '../db';
 import { formatCode } from '../lib/codes';
-import type { AppointmentDetail, AppointmentEvent, AppointmentStatus, AppointmentSummary } from '../types';
+import type { AppointmentDetail, AppointmentEvent, AppointmentStatus, AppointmentSummary, RecordStatus } from '../types';
 
 interface SummaryRow {
   id: number;
@@ -16,11 +16,14 @@ interface SummaryRow {
 interface DetailRow extends SummaryRow {
   reason: string | null;
   cancellation_reason: string | null;
+  doctor_status: RecordStatus;
+  patient_status: RecordStatus;
 }
 
 export const SUMMARY_SELECT = `
   SELECT a.id, a.doctor_id, d.full_name AS doctor_name, a.patient_id, p.full_name AS patient_name,
-         a.starts_at, a.ends_at, a.status, a.reason, a.cancellation_reason
+         a.starts_at, a.ends_at, a.status, a.reason, a.cancellation_reason,
+         d.status AS doctor_status, p.status AS patient_status
     FROM appointment a
     JOIN doctor d ON d.id = a.doctor_id
     JOIN patient p ON p.id = a.patient_id`;
@@ -107,7 +110,14 @@ export class AppointmentRepo {
         at: e.at.toISOString(),
       }),
     );
-    return { ...toSummary(row), reason: row.reason, cancellationReason: row.cancellation_reason, history };
+    return {
+      ...toSummary(row),
+      reason: row.reason,
+      cancellationReason: row.cancellation_reason,
+      doctor_status: row.doctor_status,
+      patient_status: row.patient_status,
+      history,
+    };
   }
 
   /** Appointments of one doctor that overlap [from, to), except cancelled ones. */
