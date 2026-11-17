@@ -1,7 +1,7 @@
 import type { Queryable } from '../db';
 import { formatCode } from '../lib/codes';
 import { SUMMARY_SELECT, toSummary } from './appointmentRepo';
-import type { AppointmentSummary, PatientDetail, PatientListItem, PatientSummary, RecordStatus } from '../types';
+import type { AppointmentSummary, NextAppointment, PatientDetail, PatientListItem, PatientSummary, RecordStatus } from '../types';
 
 interface Row {
   id: number;
@@ -76,6 +76,19 @@ const COLUMNS: Record<keyof PatientFields, string> = {
   status: 'status',
 };
 
+/**
+ * HMS-1 / HMS-15: the patient's earliest Scheduled appointment starting strictly after `now`.
+ * Shared by the list's lateral join and by nextAppointment so both pages apply one rule.
+ */
+function nextAppointmentSql(patientId: string, now: string): string {
+  return `SELECT a.id, a.starts_at, d.full_name AS doctor_name
+            FROM appointment a
+            JOIN doctor d ON d.id = a.doctor_id
+           WHERE a.patient_id = ${patientId} AND a.status = 'SCHEDULED' AND a.starts_at > ${now}
+           ORDER BY a.starts_at, a.id
+           LIMIT 1`;
+}
+
 export function normalizePhone(phone: string): string {
   return phone.replace(/[^0-9+]/g, '');
 }
@@ -122,14 +135,7 @@ export class PatientRepo {
       await this.db.query<ListRow>(
         `SELECT pg.*, n.id AS next_id, n.starts_at AS next_starts_at, n.doctor_name AS next_doctor_name
            FROM (${page}) pg
-           LEFT JOIN LATERAL (
-             SELECT a.id, a.starts_at, d.full_name AS doctor_name
-               FROM appointment a
-               JOIN doctor d ON d.id = a.doctor_id
-              WHERE a.patient_id = pg.id AND a.status = 'SCHEDULED' AND a.starts_at > ${p(now)}
-              ORDER BY a.starts_at, a.id
-              LIMIT 1
-           ) n ON true
+           LEFT JOIN LATERAL (${nextAppointmentSql('pg.id', p(now))}) n ON true
           ORDER BY pg.created_at DESC, pg.id DESC`,
         params,
       )
@@ -145,7 +151,15 @@ export class PatientRepo {
     };
   }
 
-  async get(id: number, today: string, forUpdate = false): Promise<Omit<PatientDetail, 'appointments'> | null> {
+  /** HMS-15: the next appointment of one patient, by the same rule as list. */
+  async nextAppointment(id: number, now: Date): Promise<NextAppointment | null> {
+    const r = (
+      await this.db.query<{ id: number; starts_at: Date; doctor_name: string }>(nextAppointmentSql('$1', '$2'), [id, now])
+    ).rows[0];
+    return r ? { id: r.id, starts_at: r.starts_at.toISOString(), doctor_name: r.doctor_name } : null;
+  }
+
+  async get(id: number, today: string, forUpdate = false): Promise<Omit<PatientDetail, 'appointments' | 'next_appointment'> | null> {
     const r = (
       await this.db.query<DetailRow>(
         `SELECT ${LIST_COLUMNS}, email, address, emergency_contact_name, emergency_contact_phone, blood_group,

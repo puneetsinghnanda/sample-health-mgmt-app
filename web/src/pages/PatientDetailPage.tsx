@@ -6,7 +6,8 @@ import { ErrorBanner } from '../components/ErrorBanner';
 import { Loading } from '../components/Loading';
 import { StatusBadge } from '../components/StatusBadge';
 import { useAsync } from '../hooks/useAsync';
-import { GENDER_LABEL } from '../lib/format';
+import { useSettings } from '../hooks/useSettings';
+import { GENDER_LABEL, dateTime } from '../lib/format';
 
 const list = (items: string[]) => (items.length ? items.join(', ') : 'None recorded');
 
@@ -15,6 +16,7 @@ export function PatientDetailPage() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
   const [error, setError] = useState<string>();
+  const { timeZone } = useSettings();
   const patient = useAsync(() => api.patient(id), id);
 
   async function remove() {
@@ -73,6 +75,16 @@ export function PatientDetailPage() {
         <dd className="prewrap">{h.notes ?? '—'}</dd>
       </dl>
       <h2>Appointments</h2>
+      {/* HMS-15: the next appointment, chosen by the API with the same rule as the patients list. */}
+      {p.next_appointment ? (
+        <p className="next-appointment">
+          Next appointment:{' '}
+          <Link to={`/appointments/${p.next_appointment.id}`}>{dateTime(p.next_appointment.starts_at, timeZone)}</Link>
+          {' '}with {p.next_appointment.doctor_name}
+        </p>
+      ) : (
+        <p className="next-appointment muted">No upcoming appointment</p>
+      )}
       <AppointmentTable items={p.appointments} hide="patient" />
     </section>
   );
