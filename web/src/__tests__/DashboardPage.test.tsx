@@ -65,4 +65,62 @@ describe('DashboardPage (PRD §4.4)', () => {
     );
     expect((await screen.findByRole('link', { name: /No-shows/ })).textContent).toBe('0No-shows');
   });
+
+  it('HMS-21 REQ-1/REQ-6: the Awaiting outcome tile shows its count and links to started Scheduled appointments', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(DATA), { status: 200 })));
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <DashboardPage />
+      </MemoryRouter>,
+    );
+    const tile = await screen.findByRole('link', { name: /Awaiting outcome/ });
+    expect(tile.textContent).toBe('3Awaiting outcome');
+    expect(tile.getAttribute('href')).toBe('/appointments?status=SCHEDULED&started=true');
+  });
+
+  it('HMS-21 REQ-5: changing the period keeps the Awaiting outcome link free of any period', async () => {
+    const week: Dashboard = { ...DATA, period: { name: '7d', from: '2026-10-13', to: '2026-10-19' }, totals: { ...DATA.totals, noShows: 11 } };
+    vi.stubGlobal('fetch', vi.fn(async (url: string) =>
+      new Response(JSON.stringify(String(url).includes('period=7d') ? week : DATA), { status: 200 }),
+    ));
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <DashboardPage />
+      </MemoryRouter>,
+    );
+    await screen.findByRole('link', { name: /4\s*No-shows/ });
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: '7d' } });
+    await screen.findByRole('link', { name: /11\s*No-shows/ });
+    const tile = screen.getByRole('link', { name: /Awaiting outcome/ });
+    expect(tile.textContent).toBe('3Awaiting outcome');
+    expect(tile.getAttribute('href')).toBe('/appointments?status=SCHEDULED&started=true');
+  });
+
+  it('HMS-21 REQ-7 edge: with no started Scheduled appointments the tile shows 0', async () => {
+    const none: Dashboard = { ...DATA, totals: { ...DATA.totals, awaitingOutcome: 0 } };
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(none), { status: 200 })));
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <DashboardPage />
+      </MemoryRouter>,
+    );
+    expect((await screen.findByRole('link', { name: /Awaiting outcome/ })).textContent).toBe('0Awaiting outcome');
+  });
+
+  it('HMS-21 REQ-8: the existing tiles keep their counts and links', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(DATA), { status: 200 })));
+    const { container } = render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <DashboardPage />
+      </MemoryRouter>,
+    );
+    const upcoming = await screen.findByRole('link', { name: /Upcoming appointments/ });
+    expect(upcoming.textContent).toContain('140');
+    expect(upcoming.getAttribute('href')).toBe('/appointments?status=SCHEDULED&from=2026-10-19');
+    // Count only the dashboard tiles, not every link on the page.
+    const labels = Array.from(container.querySelectorAll('.tiles a.tile'), (t) => t.querySelector('.tile-label')?.textContent ?? '');
+    expect(labels).toHaveLength(8);
+    expect(labels).toContain('Awaiting outcome');
+    expect(labels).toContain('No-shows');
+  });
 });
