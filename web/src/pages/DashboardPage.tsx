@@ -57,6 +57,11 @@ export function DashboardPage() {
               value={data.totals.noShows}
               to={`/appointments${query({ status: 'NO_SHOW', from: data.period.from, to: data.period.to })}`}
             />
+            <Tile
+              label="Awaiting outcome"
+              value={data.totals.awaitingOutcome}
+              to={`/appointments${query({ status: 'SCHEDULED', started: 'true' })}`}
+            />
           </div>
           <h2>Next appointments</h2>
           <AppointmentTable items={data.next} />

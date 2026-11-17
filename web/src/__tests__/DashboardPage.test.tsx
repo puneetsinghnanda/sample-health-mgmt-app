@@ -7,7 +7,7 @@ import { DashboardPage } from '../pages/DashboardPage';
 const DATA: Dashboard = {
   today: '2026-10-19',
   period: { name: 'today', from: '2026-10-19', to: '2026-10-19' },
-  totals: { patients: 200, doctors: 12, appointmentsToday: 31, upcoming: 140, completed: 9, cancelled: 2, noShows: 4 },
+  totals: { patients: 200, doctors: 12, appointmentsToday: 31, upcoming: 140, completed: 9, cancelled: 2, noShows: 4, awaitingOutcome: 3 },
   next: [],
 };
 

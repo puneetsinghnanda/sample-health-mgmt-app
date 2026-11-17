@@ -138,6 +138,6 @@ export type Period = 'today' | '7d' | '30d';
 export interface Dashboard {
   today: string;
   period: { name: Period; from: string; to: string };
-  totals: { patients: number; doctors: number; appointmentsToday: number; upcoming: number; completed: number; cancelled: number; noShows: number };
+  totals: { patients: number; doctors: number; appointmentsToday: number; upcoming: number; completed: number; cancelled: number; noShows: number; awaitingOutcome: number };
   next: AppointmentSummary[];
 }

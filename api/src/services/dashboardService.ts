@@ -21,6 +21,8 @@ export interface Dashboard {
     completed: number;
     cancelled: number;
     noShows: number;
+    /** HMS-21: Scheduled appointments that started before now; no period applies. */
+    awaitingOutcome: number;
   };
   next: AppointmentSummary[];
 }
@@ -52,7 +54,8 @@ export class DashboardService {
          (SELECT count(*) FROM appointment WHERE status = 'SCHEDULED' AND starts_at > $3) AS upcoming,
          (SELECT count(*) FROM appointment WHERE status = 'COMPLETED' AND starts_at >= $4 AND starts_at < $2) AS completed,
          (SELECT count(*) FROM appointment WHERE status = 'CANCELLED' AND starts_at >= $4 AND starts_at < $2) AS cancelled,
-         (SELECT count(*) FROM appointment WHERE status = 'NO_SHOW' AND starts_at >= $4 AND starts_at < $2) AS no_shows`,
+         (SELECT count(*) FROM appointment WHERE status = 'NO_SHOW' AND starts_at >= $4 AND starts_at < $2) AS no_shows,
+         (SELECT count(*) FROM appointment WHERE status = 'SCHEDULED' AND starts_at < $3) AS awaiting_outcome`,
       [todayBounds.start, todayBounds.end, now, periodStart],
     );
     const r = rows[0]!;
@@ -73,6 +76,7 @@ export class DashboardService {
         completed: Number(r.completed),
         cancelled: Number(r.cancelled),
         noShows: Number(r.no_shows),
+        awaitingOutcome: Number(r.awaiting_outcome),
       },
       next,
     };

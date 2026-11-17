@@ -11,7 +11,7 @@ import { STATUS_LABEL } from '../lib/format';
 export function AppointmentsPage() {
   const [params, setParams] = useSearchParams();
   const filters = Object.fromEntries(
-    ['doctorId', 'patientId', 'status', 'from', 'to', 'page'].map((k) => [k, params.get(k) ?? undefined]),
+    ['doctorId', 'patientId', 'status', 'from', 'to', 'started', 'page'].map((k) => [k, params.get(k) ?? undefined]),
   );
   const list = useAsync(() => api.appointments(filters), params.toString());
   const set = (key: string, value: string) => {

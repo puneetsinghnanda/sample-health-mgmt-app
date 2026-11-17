@@ -37,6 +37,7 @@ describe.skipIf(!pgAvailable())('dashboard (PRD §4.4)', () => {
       completed: 1, // DSH-5
       cancelled: 1, // DSH-6
       noShows: 0, // HMS-3: none yet
+      awaitingOutcome: 0, // HMS-21 (REQ-2): no Scheduled appointment started before 09:20
     });
   });
 

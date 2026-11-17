@@ -43,6 +43,8 @@ export interface AppointmentFilter {
   status?: AppointmentStatus;
   from?: Date;
   to?: Date;
+  /** HMS-21: only appointments that start strictly before this instant. */
+  startedBefore?: Date;
   limit: number;
   offset: number;
 }
@@ -70,6 +72,7 @@ export class AppointmentRepo {
     if (f.status !== undefined) add('a.status = ?', f.status);
     if (f.from !== undefined) add('a.starts_at >= ?', f.from);
     if (f.to !== undefined) add('a.starts_at < ?', f.to);
+    if (f.startedBefore !== undefined) add('a.starts_at < ?', f.startedBefore);
     const clause = where.length ? `WHERE ${where.join(' AND ')}` : '';
     const total = Number(
       (await this.db.query<{ n: string }>(`SELECT count(*) AS n FROM appointment a ${clause}`, params)).rows[0]?.n ?? 0,

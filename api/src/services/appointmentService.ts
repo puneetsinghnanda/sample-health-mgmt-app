@@ -36,6 +36,8 @@ export class AppointmentService {
     const from = f.day('from');
     const to = f.day('to');
     if (from && to && from > to) f.fail('to', 'must not be before from');
+    // HMS-21: started=true keeps appointments that start before the server's now (never a client instant).
+    const started = f.oneOf('started', ['true'] as const) === 'true';
     f.done();
     const tz = this.config.timeZone;
     const size = this.config.pageSize;
@@ -45,6 +47,7 @@ export class AppointmentService {
       status,
       from: from ? dayBounds(from, tz).start : undefined,
       to: to ? dayBounds(to, tz).end : undefined,
+      startedBefore: started ? this.clock() : undefined,
       limit: size,
       offset: (page - 1) * size,
     });
