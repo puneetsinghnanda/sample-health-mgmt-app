@@ -114,6 +114,17 @@ export interface PatientDetail extends PatientSummary {
     notes: string | null;
   };
   appointments: AppointmentSummary[];
+  /** HMS-24: counts over all of the patient's appointments, and the most recent Completed one. Read-only. */
+  visitSummary: VisitSummary;
+}
+
+/** HMS-24: upcoming = Scheduled and starting after now. lastVisit.date is the hospital-local day (YYYY-MM-DD). */
+export interface VisitSummary {
+  completed: number;
+  noShow: number;
+  cancelled: number;
+  upcoming: number;
+  lastVisit: { appointmentId: number; date: string; doctorName: string } | null;
 }
 
 export interface AppointmentEvent {

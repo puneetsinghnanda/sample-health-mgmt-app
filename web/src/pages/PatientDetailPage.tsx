@@ -5,6 +5,7 @@ import { AppointmentTable } from '../components/AppointmentTable';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { Loading } from '../components/Loading';
 import { StatusBadge } from '../components/StatusBadge';
+import { VisitSummary } from '../components/VisitSummary';
 import { useAsync } from '../hooks/useAsync';
 import { GENDER_LABEL } from '../lib/format';
 
@@ -73,6 +74,7 @@ export function PatientDetailPage() {
         <dd className="prewrap">{h.notes ?? '—'}</dd>
       </dl>
       <h2>Appointments</h2>
+      <VisitSummary summary={p.visitSummary} hasAppointments={p.appointments.length > 0} />
       <AppointmentTable items={p.appointments} hide="patient" />
     </section>
   );
