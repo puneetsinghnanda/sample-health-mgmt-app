@@ -24,6 +24,13 @@ export function dateTime(iso: string, timeZone: string): string {
   });
 }
 
+/** HMS-24: a calendar day (YYYY-MM-DD, already hospital-local) as "10 Mar 2026", in dateTime's style without the time. */
+export function localDate(day: string): string {
+  return new Date(`${day}T00:00:00Z`).toLocaleDateString('en-IN', {
+    timeZone: 'UTC', day: '2-digit', month: 'short', year: 'numeric',
+  });
+}
+
 export function time(iso: string, timeZone: string): string {
   return new Date(iso).toLocaleTimeString('en-IN', { timeZone, hour: '2-digit', minute: '2-digit', hour12: false });
 }

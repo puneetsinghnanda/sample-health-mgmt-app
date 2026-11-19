@@ -1,7 +1,8 @@
 import type { Queryable } from '../db';
 import { formatCode } from '../lib/codes';
+import { localDay } from '../lib/time';
 import { SUMMARY_SELECT, toSummary } from './appointmentRepo';
-import type { AppointmentSummary, PatientDetail, PatientListItem, PatientSummary, RecordStatus } from '../types';
+import type { AppointmentSummary, PatientDetail, PatientListItem, PatientSummary, RecordStatus, VisitSummary } from '../types';
 
 interface Row {
   id: number;
@@ -145,7 +146,7 @@ export class PatientRepo {
     };
   }
 
-  async get(id: number, today: string, forUpdate = false): Promise<Omit<PatientDetail, 'appointments'> | null> {
+  async get(id: number, today: string, forUpdate = false): Promise<Omit<PatientDetail, 'appointments' | 'visitSummary'> | null> {
     const r = (
       await this.db.query<DetailRow>(
         `SELECT ${LIST_COLUMNS}, email, address, emergency_contact_name, emergency_contact_phone, blood_group,
@@ -229,5 +230,42 @@ export class PatientRepo {
         [id, now, limit],
       )
     ).rows.map(toSummary);
+  }
+
+  /**
+   * HMS-24: counts over ALL of the patient's appointments (no row limit), and the most recent Completed one.
+   * Selects only status, start, id and doctor name: never reasons or medical history.
+   */
+  async visitSummary(id: number, now: Date, timeZone: string): Promise<VisitSummary> {
+    const counts = (
+      await this.db.query<{ completed: string; no_show: string; cancelled: string; upcoming: string }>(
+        `SELECT count(*) FILTER (WHERE status = 'COMPLETED') AS completed,
+                count(*) FILTER (WHERE status = 'NO_SHOW') AS no_show,
+                count(*) FILTER (WHERE status = 'CANCELLED') AS cancelled,
+                count(*) FILTER (WHERE status = 'SCHEDULED' AND starts_at > $2) AS upcoming
+           FROM appointment WHERE patient_id = $1`,
+        [id, now],
+      )
+    ).rows[0];
+    const last = (
+      await this.db.query<{ id: number; starts_at: Date; doctor_name: string }>(
+        `SELECT a.id, a.starts_at, d.full_name AS doctor_name
+           FROM appointment a
+           JOIN doctor d ON d.id = a.doctor_id
+          WHERE a.patient_id = $1 AND a.status = 'COMPLETED'
+          ORDER BY a.starts_at DESC, a.id DESC
+          LIMIT 1`,
+        [id],
+      )
+    ).rows[0];
+    return {
+      completed: Number(counts?.completed ?? 0),
+      noShow: Number(counts?.no_show ?? 0),
+      cancelled: Number(counts?.cancelled ?? 0),
+      upcoming: Number(counts?.upcoming ?? 0),
+      lastVisit: last
+        ? { appointmentId: last.id, date: localDay(last.starts_at, timeZone), doctorName: last.doctor_name }
+        : null,
+    };
   }
 }
