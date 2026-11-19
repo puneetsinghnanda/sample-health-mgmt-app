@@ -24,6 +24,7 @@ export interface AppContext {
 
 /** `clock` is injectable so tests can fix "now"; production uses the real time. */
 export function createContext(db: Database, config: AppConfig, clock: () => Date = () => new Date()): AppContext {
+  const doctors = new DoctorService(db, config, clock);
   return {
     db,
     config,
@@ -31,10 +32,10 @@ export function createContext(db: Database, config: AppConfig, clock: () => Date
     services: {
       departments: new ReferenceService(db, 'department'),
       specializations: new ReferenceService(db, 'specialization'),
-      doctors: new DoctorService(db, config, clock),
+      doctors,
       patients: new PatientService(db, config, clock),
       appointments: new AppointmentService(db, config, clock),
-      dashboard: new DashboardService(db, config, clock),
+      dashboard: new DashboardService(db, config, clock, doctors),
     },
   };
 }

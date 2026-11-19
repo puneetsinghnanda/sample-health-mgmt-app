@@ -79,6 +79,19 @@ export interface NextDay {
   free: number | null;
 }
 
+/** HMS-23: one doctor on duty today, counted as the day schedule counts. No contact details (DSH-9). */
+export interface OnDutyRow {
+  doctorId: number;
+  fullName: string;
+  department: string;
+  booked: number;
+  free: number;
+  /** Start of the earliest FREE slot (ISO 8601 UTC); null when free is 0. */
+  nextFreeAt: string | null;
+  /** That slot's HH:MM label in the hospital zone; null when free is 0. */
+  nextFreeLabel: string | null;
+}
+
 export interface PatientSummary {
   id: number;
   code: string;

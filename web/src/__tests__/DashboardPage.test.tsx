@@ -9,6 +9,7 @@ const DATA: Dashboard = {
   period: { name: 'today', from: '2026-10-19', to: '2026-10-19' },
   totals: { patients: 200, doctors: 12, appointmentsToday: 31, upcoming: 140, completed: 9, cancelled: 2, noShows: 4 },
   next: [],
+  onDuty: [],
 };
 
 describe('DashboardPage (PRD §4.4)', () => {

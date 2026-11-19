@@ -4,13 +4,13 @@ import { formatCode, idFromCode } from '../lib/codes';
 import { conflict, fieldError, notFound, pgError } from '../lib/errors';
 import { lastDays } from '../lib/periods';
 import { availabilityProblem, daySlots, withinAvailability } from '../lib/slots';
-import { addDays, dayBounds, localDay } from '../lib/time';
+import { addDays, dayBounds, isoWeekday, localDay } from '../lib/time';
 import { Fields } from '../lib/validate';
 import { AppointmentRepo } from '../repositories/appointmentRepo';
 import { DoctorRepo, type DoctorFields } from '../repositories/doctorRepo';
 import {
   RECORD_STATUSES, SLOT_MINUTES, type AppointmentSummary, type AvailabilityBlock, type DoctorDetail,
-  type DoctorListRow, type DoctorSummary, type NextDay, type Page, type RecordStatus,
+  type DoctorListRow, type DoctorSummary, type NextDay, type OnDutyRow, type Page, type RecordStatus,
 } from '../types';
 
 export interface DaySchedule {
@@ -161,6 +161,38 @@ export class DoctorService {
       const state: 'FREE' | 'BOOKED' | 'PAST' = taken ? 'BOOKED' : s.start.getTime() <= now ? 'PAST' : 'FREE';
       return { s, state, taken };
     });
+  }
+
+  /**
+   * HMS-23: Active doctors with availability on today's weekday (hospital zone), counted exactly as the day
+   * schedule shows today. Sorted by free slots, most first, then name.
+   */
+  async onDutyToday(): Promise<OnDutyRow[]> {
+    const tz = this.config.timeZone;
+    const now = this.clock();
+    const today = localDay(now, tz);
+    const { start, end } = dayBounds(today, tz);
+    const appointmentRepo = new AppointmentRepo(this.db);
+    const rows: OnDutyRow[] = [];
+    for (const d of await new DoctorRepo(this.db).activeOnWeekday(isoWeekday(today))) {
+      const appointments = await appointmentRepo.occupyingBetween(d.id, start, end);
+      const states = this.slotStates(d.blocks, d.slotMinutes, today, appointments, now.getTime());
+      const free = states.filter((x) => x.state === 'FREE');
+      const next = free.reduce<(typeof free)[number] | undefined>(
+        (best, x) => (!best || x.s.start.getTime() < best.s.start.getTime() ? x : best), undefined,
+      );
+      rows.push({
+        doctorId: d.id,
+        fullName: d.fullName,
+        department: d.departmentName,
+        booked: states.filter((x) => x.state === 'BOOKED').length,
+        free: free.length,
+        nextFreeAt: next ? next.s.start.toISOString() : null,
+        nextFreeLabel: next ? next.s.label : null,
+      });
+    }
+    // activeOnWeekday returns name order; a stable sort keeps it for equal free counts.
+    return rows.sort((a, b) => b.free - a.free);
   }
 
   /** HMS-9: today to 6 days ahead in the hospital zone, counted exactly as the day schedule shows each day. */

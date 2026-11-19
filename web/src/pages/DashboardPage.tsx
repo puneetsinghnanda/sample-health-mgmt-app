@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, query } from '../api/client';
-import type { Period } from '../api/types';
+import type { OnDutyRow, Period } from '../api/types';
 import { AppointmentTable } from '../components/AppointmentTable';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { Loading } from '../components/Loading';
@@ -58,9 +58,47 @@ export function DashboardPage() {
               to={`/appointments${query({ status: 'NO_SHOW', from: data.period.from, to: data.period.to })}`}
             />
           </div>
+          <OnDutyToday rows={data.onDuty} />
           <h2>Next appointments</h2>
           <AppointmentTable items={data.next} />
         </>
+      )}
+    </section>
+  );
+}
+
+/** HMS-23: doctors on duty today, sorted by the API. Ignores the Period selector; no contact details. */
+function OnDutyToday({ rows }: { rows: OnDutyRow[] }) {
+  return (
+    <section aria-labelledby="on-duty-today">
+      <h2 id="on-duty-today">On duty today</h2>
+      {rows.length === 0 ? (
+        <p>No doctors on duty today</p>
+      ) : (
+        <table>
+          <thead>
+            <tr>
+              <th>Doctor</th>
+              <th>Department</th>
+              <th>Booked</th>
+              <th>Free</th>
+              <th>Next free slot</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.doctorId}>
+                <td>
+                  <Link to={`/doctors/${r.doctorId}`}>{r.fullName}</Link>
+                </td>
+                <td>{r.department}</td>
+                <td>{r.booked}</td>
+                <td>{r.free}</td>
+                <td>{r.free === 0 || !r.nextFreeLabel ? 'Fully booked' : r.nextFreeLabel}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       )}
     </section>
   );

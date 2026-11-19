@@ -71,6 +71,15 @@ const COLUMNS: Record<keyof DoctorFields, string> = {
   status: 'status',
 };
 
+/** HMS-23: an Active doctor with availability on a given weekday. */
+export interface OnDutyDoctor {
+  id: number;
+  fullName: string;
+  departmentName: string;
+  slotMinutes: number;
+  blocks: AvailabilityBlock[];
+}
+
 export class DoctorRepo {
   constructor(private readonly db: Queryable) {}
 
@@ -162,6 +171,26 @@ export class DoctorRepo {
         [id, now, limit],
       )
     ).rows.map(toSummary);
+  }
+
+  /** HMS-23: Active doctors with an availability block on `weekday` (1 = Monday .. 7 = Sunday), with all their blocks. */
+  async activeOnWeekday(weekday: number): Promise<OnDutyDoctor[]> {
+    const doctors = (
+      await this.db.query<{ id: number; full_name: string; department_name: string; slot_minutes: number }>(
+        `SELECT d.id, d.full_name, dp.name AS department_name, d.slot_minutes
+           FROM doctor d
+           JOIN department dp ON dp.id = d.department_id
+          WHERE d.status = 'ACTIVE'
+            AND EXISTS (SELECT 1 FROM availability_block b WHERE b.doctor_id = d.id AND b.weekday = $1)
+          ORDER BY lower(d.full_name), d.id`,
+        [weekday],
+      )
+    ).rows;
+    const out: OnDutyDoctor[] = [];
+    for (const d of doctors) {
+      out.push({ id: d.id, fullName: d.full_name, departmentName: d.department_name, slotMinutes: d.slot_minutes, blocks: await this.availability(d.id) });
+    }
+    return out;
   }
 
   async refStatus(kind: 'department' | 'specialization', id: number): Promise<string | null> {
