@@ -140,4 +140,17 @@ export interface Dashboard {
   period: { name: Period; from: string; to: string };
   totals: { patients: number; doctors: number; appointmentsToday: number; upcoming: number; completed: number; cancelled: number; noShows: number };
   next: AppointmentSummary[];
+  /** HMS-23: doctors on duty today; ignores the period. */
+  onDuty: OnDutyRow[];
+}
+
+/** HMS-23: one doctor on duty today. nextFreeAt (ISO UTC) and nextFreeLabel (HH:MM hospital time) are null when free is 0. */
+export interface OnDutyRow {
+  doctorId: number;
+  fullName: string;
+  department: string;
+  booked: number;
+  free: number;
+  nextFreeAt: string | null;
+  nextFreeLabel: string | null;
 }

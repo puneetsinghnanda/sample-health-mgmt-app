@@ -9,6 +9,7 @@ const DATA: Dashboard = {
   period: { name: 'today', from: '2026-10-19', to: '2026-10-19' },
   totals: { patients: 200, doctors: 12, appointmentsToday: 31, upcoming: 140, completed: 9, cancelled: 2, noShows: 4 },
   next: [],
+  onDuty: [],
 };
 
 describe('DashboardPage (PRD §4.4)', () => {
@@ -53,6 +54,68 @@ describe('DashboardPage (PRD §4.4)', () => {
     fireEvent.change(screen.getByRole('combobox'), { target: { value: '7d' } });
     const tile = await screen.findByRole('link', { name: /11\s*No-shows/ });
     expect(tile.getAttribute('href')).toBe('/appointments?status=NO_SHOW&from=2026-10-13&to=2026-10-19');
+  });
+
+  it('HMS-23 REQ-1, REQ-3, REQ-8, REQ-9: "On duty today" lists each doctor in API order with a link to the doctor page', async () => {
+    const data: Dashboard = {
+      ...DATA,
+      onDuty: [
+        { doctorId: 7, fullName: 'Dr. Test Doctor Seven', department: 'Outpatient', booked: 1, free: 5, nextFreeAt: '2026-10-19T06:00:00.000Z', nextFreeLabel: '11:30' },
+        { doctorId: 3, fullName: 'Dr. Test Doctor Three', department: 'Surgery', booked: 4, free: 2, nextFreeAt: '2026-10-19T06:30:00.000Z', nextFreeLabel: '12:00' },
+      ],
+    };
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(data), { status: 200 })));
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <DashboardPage />
+      </MemoryRouter>,
+    );
+    const section = (await screen.findByRole('heading', { name: 'On duty today' })).closest('section')!;
+    const rows = Array.from(section.querySelectorAll('tbody tr')).map((tr) => Array.from(tr.querySelectorAll('td')).map((td) => td.textContent));
+    expect(rows).toEqual([
+      ['Dr. Test Doctor Seven', 'Outpatient', '1', '5', '11:30'],
+      ['Dr. Test Doctor Three', 'Surgery', '4', '2', '12:00'],
+    ]);
+    expect(screen.getByRole('link', { name: 'Dr. Test Doctor Three' }).getAttribute('href')).toBe('/doctors/3');
+  });
+
+  it('HMS-23 REQ-14: the section sits between the tiles and Next appointments', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(DATA), { status: 200 })));
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <DashboardPage />
+      </MemoryRouter>,
+    );
+    await screen.findByRole('heading', { name: 'On duty today' });
+    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual(['On duty today', 'Next appointments']);
+  });
+
+  it('HMS-23 REQ-7: a doctor with no free slots shows "Fully booked" instead of a time', async () => {
+    const data: Dashboard = {
+      ...DATA,
+      onDuty: [{ doctorId: 2, fullName: 'Dr. Test Doctor Two', department: 'Surgery', booked: 2, free: 0, nextFreeAt: null, nextFreeLabel: null }],
+    };
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(data), { status: 200 })));
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <DashboardPage />
+      </MemoryRouter>,
+    );
+    const link = await screen.findByRole('link', { name: 'Dr. Test Doctor Two' });
+    const cells = Array.from(link.closest('tr')!.querySelectorAll('td')).map((td) => td.textContent);
+    expect(cells).toEqual(['Dr. Test Doctor Two', 'Surgery', '2', '0', 'Fully booked']);
+  });
+
+  it('HMS-23 REQ-10: with no doctors on duty the section says so and shows no table', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(DATA), { status: 200 })));
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <DashboardPage />
+      </MemoryRouter>,
+    );
+    const section = (await screen.findByRole('heading', { name: 'On duty today' })).closest('section')!;
+    expect(section.textContent).toContain('No doctors on duty today');
+    expect(section.querySelector('table')).toBeNull();
   });
 
   it('HMS-3 REQ-2 edge: a period with no No-shows shows 0', async () => {
