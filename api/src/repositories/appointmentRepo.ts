@@ -1,6 +1,6 @@
 import type { Queryable } from '../db';
 import { formatCode } from '../lib/codes';
-import type { AppointmentDetail, AppointmentEvent, AppointmentStatus, AppointmentSummary } from '../types';
+import type { AppointmentDetail, AppointmentEvent, AppointmentListItem, AppointmentStatus, AppointmentSummary } from '../types';
 
 interface SummaryRow {
   id: number;
@@ -58,7 +58,7 @@ export interface NewAppointment {
 export class AppointmentRepo {
   constructor(private readonly db: Queryable) {}
 
-  async list(f: AppointmentFilter): Promise<{ items: AppointmentSummary[]; total: number }> {
+  async list(f: AppointmentFilter): Promise<{ items: AppointmentListItem[]; total: number }> {
     const where: string[] = [];
     const params: unknown[] = [];
     const add = (sql: string, value: unknown): void => {
@@ -75,12 +75,12 @@ export class AppointmentRepo {
       (await this.db.query<{ n: string }>(`SELECT count(*) AS n FROM appointment a ${clause}`, params)).rows[0]?.n ?? 0,
     );
     const rows = (
-      await this.db.query<SummaryRow>(
+      await this.db.query<SummaryRow & { cancellation_reason: string | null }>(
         `${SUMMARY_SELECT} ${clause} ORDER BY a.starts_at, a.id LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
         [...params, f.limit, f.offset],
       )
     ).rows;
-    return { items: rows.map(toSummary), total };
+    return { items: rows.map((r) => ({ ...toSummary(r), cancellationReason: r.cancellation_reason })), total };
   }
 
   async get(id: number, forUpdate = false): Promise<DetailRow | null> {

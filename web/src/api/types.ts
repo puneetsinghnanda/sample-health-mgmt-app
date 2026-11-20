@@ -55,6 +55,11 @@ export interface AppointmentSummary {
   status: AppointmentStatus;
 }
 
+/** HMS-33: an item of GET /api/appointments; null when the appointment has no cancellation reason. */
+export interface AppointmentListItem extends AppointmentSummary {
+  cancellationReason: string | null;
+}
+
 export interface DoctorDetail extends DoctorSummary {
   availability: AvailabilityBlock[];
   upcoming: AppointmentSummary[];

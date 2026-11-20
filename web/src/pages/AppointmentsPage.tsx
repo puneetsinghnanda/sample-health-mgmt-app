@@ -46,7 +46,7 @@ export function AppointmentsPage() {
       {list.data && (
         <>
           <p className="muted">{list.data.total} appointment(s)</p>
-          <AppointmentTable items={list.data.items} />
+          <AppointmentTable items={list.data.items} showCancellationReason />
           <Pagination page={list.data.page} pageSize={list.data.page_size} total={list.data.total} onPage={(p) => set('page', String(p))} />
         </>
       )}
