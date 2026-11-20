@@ -8,7 +8,7 @@ import { Fields } from '../lib/validate';
 import { AppointmentRepo } from '../repositories/appointmentRepo';
 import { DoctorRepo } from '../repositories/doctorRepo';
 import { PatientRepo } from '../repositories/patientRepo';
-import { APPOINTMENT_STATUSES, type AppointmentDetail, type AppointmentSummary, type Page } from '../types';
+import { APPOINTMENT_STATUSES, type AppointmentDetail, type AppointmentListItem, type Page } from '../types';
 
 const SLOT_TAKEN = 'This slot is no longer available';
 const PATIENT_BUSY = 'The patient already has an appointment at that time';
@@ -22,7 +22,7 @@ export class AppointmentService {
   ) {}
 
   /** APT-9: by doctor or patient, date range (hospital-local days) and status. */
-  async list(query: Record<string, unknown>, page: number): Promise<Page<AppointmentSummary>> {
+  async list(query: Record<string, unknown>, page: number): Promise<Page<AppointmentListItem>> {
     const f = new Fields(query);
     const id = (name: string): number | undefined => {
       const v = query[name];

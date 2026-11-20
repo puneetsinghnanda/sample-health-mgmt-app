@@ -5,12 +5,23 @@ import { dateTime } from '../lib/format';
 import { StatusBadge } from './StatusBadge';
 
 interface Props {
-  items: AppointmentSummary[];
+  items: Array<AppointmentSummary & { cancellationReason?: string | null }>;
   hide?: 'doctor' | 'patient';
   flagged?: number[];
+  /** HMS-33: adds the Cancellation reason column after Status; only the appointment list sets it. */
+  showCancellationReason?: boolean;
 }
 
-export function AppointmentTable({ items, hide, flagged = [] }: Props) {
+const REASON_MAX = 60;
+
+/** HMS-33: a Cancelled appointment's reason, shortened past 60 characters; "-" otherwise. */
+function reasonCell(a: AppointmentSummary & { cancellationReason?: string | null }): string {
+  if (a.status !== 'CANCELLED' || !a.cancellationReason) return '-';
+  const chars = Array.from(a.cancellationReason);
+  return chars.length > REASON_MAX ? `${chars.slice(0, REASON_MAX).join('')}…` : a.cancellationReason;
+}
+
+export function AppointmentTable({ items, hide, flagged = [], showCancellationReason = false }: Props) {
   const { timeZone } = useSettings();
   if (items.length === 0) return <p className="muted">No appointments.</p>;
   return (
@@ -22,6 +33,7 @@ export function AppointmentTable({ items, hide, flagged = [] }: Props) {
           {hide !== 'doctor' && <th scope="col">Doctor</th>}
           {hide !== 'patient' && <th scope="col">Patient</th>}
           <th scope="col">Status</th>
+          {showCancellationReason && <th scope="col">Cancellation reason</th>}
         </tr>
       </thead>
       <tbody>
@@ -45,6 +57,7 @@ export function AppointmentTable({ items, hide, flagged = [] }: Props) {
             <td>
               <StatusBadge status={a.status} />
             </td>
+            {showCancellationReason && <td>{reasonCell(a)}</td>}
           </tr>
         ))}
       </tbody>

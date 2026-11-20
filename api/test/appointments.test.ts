@@ -110,4 +110,33 @@ describe.skipIf(!pgAvailable())('appointment management (PRD §4.3)', () => {
     expect(history.every((e: { actor: string; at: string }) => e.actor === 'staff' && !Number.isNaN(Date.parse(e.at)))).toBe(true);
     expect(history[2].note).toBe('Patient requested');
   });
+
+  it('HMS-33 REQ-3, REQ-4: list items carry the cancellation reason, null when not Cancelled', async () => {
+    const items = (await request(app).get('/api/appointments?patientId=1')).body.items as Array<{ id: number; status: string; cancellationReason: string | null }>;
+    expect(items.find((a) => a.id === 1)).toMatchObject({ status: 'CANCELLED', cancellationReason: 'Patient requested' });
+    const others = items.filter((a) => a.status !== 'CANCELLED');
+    expect(others.length).toBeGreaterThan(0);
+    expect(others.every((a) => a.cancellationReason === null)).toBe(true);
+  });
+
+  it('HMS-33 REQ-9: filtering by Cancelled gives a reason on every item', async () => {
+    const items = (await request(app).get('/api/appointments?status=CANCELLED')).body.items as Array<{ cancellationReason: string | null }>;
+    expect(items.length).toBeGreaterThan(0);
+    expect(items.every((a) => typeof a.cancellationReason === 'string' && a.cancellationReason.length > 0)).toBe(true);
+  });
+
+  it('HMS-33 REQ-12: the patient page response does not gain the field', async () => {
+    const patient = (await request(app).get('/api/patients/1')).body;
+    expect(patient.appointments.length).toBeGreaterThan(0);
+    expect(patient.appointments.some((a: object) => 'cancellationReason' in a)).toBe(false);
+  });
+
+  it('HMS-33 REQ-7, REQ-16: a 300-character reason is stored and returned whole by the list and the appointment', async () => {
+    const long = 'C'.repeat(300);
+    const appt = (await book(app, 1, 2, TUESDAY, '11:00')).body;
+    expect((await request(app).post(`/api/appointments/${appt.id}/cancel`).send({ reason: long })).status).toBe(200);
+    expect((await request(app).get(`/api/appointments/${appt.id}`)).body.cancellationReason).toBe(long);
+    const listed = (await request(app).get('/api/appointments?patientId=2&status=CANCELLED')).body.items.find((a: { id: number }) => a.id === appt.id);
+    expect(listed.cancellationReason).toBe(long);
+  });
 });
