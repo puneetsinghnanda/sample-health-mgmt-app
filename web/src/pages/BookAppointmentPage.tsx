@@ -7,7 +7,7 @@ import { Picker } from '../components/Picker';
 import { SlotPicker } from '../components/SlotPicker';
 import { useAsync } from '../hooks/useAsync';
 import { useSettings } from '../hooks/useSettings';
-import { todayIn } from '../lib/format';
+import { rupees, todayIn } from '../lib/format';
 
 const numberOrUndefined = (v: string | null) => (v ? Number(v) : undefined);
 
@@ -38,6 +38,13 @@ export function BookAppointmentPage() {
     }));
   }, `${doctorId}:${patientId}`);
   const day = useAsync(() => (doctorId ? api.schedule(doctorId, date) : Promise.resolve(undefined)), `${doctorId}:${date}`);
+  // HMS-32: the chosen doctor's consultation fee, display only. useAsync keeps the previous
+  // doctor's data while the next one loads, so show the fee only for the doctor chosen now.
+  const chosenDoctor = useAsync(() => (doctorId ? api.doctor(doctorId) : Promise.resolve(undefined)), `fee:${doctorId}`);
+  const feePaise =
+    doctorId && !chosenDoctor.loading && !chosenDoctor.error && chosenDoctor.data?.id === doctorId
+      ? chosenDoctor.data.feePaise
+      : undefined;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -82,6 +89,12 @@ export function BookAppointmentPage() {
             setStart(undefined);
           }}
         />
+        {feePaise !== undefined && (
+          <dl className="details">
+            <dt>Consultation fee</dt>
+            <dd>{rupees(feePaise)}</dd>
+          </dl>
+        )}
         <Picker
           label="Patient"
           value={patientId}
