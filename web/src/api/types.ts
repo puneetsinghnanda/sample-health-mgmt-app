@@ -97,6 +97,15 @@ export interface PatientListItem extends PatientSummary {
   next_appointment: NextAppointment | null;
 }
 
+/** HMS-26: the patient page's visit summary, over all of the patient's appointments. */
+export interface PatientVisits {
+  next: NextAppointment | null;
+  last: NextAppointment | null;
+  completed: number;
+  cancelled: number;
+  no_show: number;
+}
+
 export interface PatientDetail extends PatientSummary {
   email: string | null;
   address: string | null;
@@ -109,6 +118,7 @@ export interface PatientDetail extends PatientSummary {
     notes: string | null;
   };
   appointments: AppointmentSummary[];
+  visits: PatientVisits;
 }
 
 export interface AppointmentDetail extends AppointmentSummary {

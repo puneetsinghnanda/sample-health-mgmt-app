@@ -5,7 +5,9 @@ import { AppointmentTable } from '../components/AppointmentTable';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { Loading } from '../components/Loading';
 import { StatusBadge } from '../components/StatusBadge';
+import { VisitsSummary } from '../components/VisitsSummary';
 import { useAsync } from '../hooks/useAsync';
+import { useSettings } from '../hooks/useSettings';
 import { GENDER_LABEL } from '../lib/format';
 
 const list = (items: string[]) => (items.length ? items.join(', ') : 'None recorded');
@@ -14,6 +16,7 @@ const list = (items: string[]) => (items.length ? items.join(', ') : 'None recor
 export function PatientDetailPage() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
+  const { timeZone } = useSettings();
   const [error, setError] = useState<string>();
   const patient = useAsync(() => api.patient(id), id);
 
@@ -45,6 +48,7 @@ export function PatientDetailPage() {
         </div>
       </div>
       {error && <ErrorBanner message={error} />}
+      <VisitsSummary visits={p.visits} timeZone={timeZone} />
       <dl className="details">
         <dt>Date of birth</dt>
         <dd>{p.dateOfBirth} ({p.age} years)</dd>
