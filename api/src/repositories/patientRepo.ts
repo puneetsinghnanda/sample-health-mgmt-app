@@ -1,7 +1,9 @@
 import type { Queryable } from '../db';
 import { formatCode } from '../lib/codes';
 import { SUMMARY_SELECT, toSummary } from './appointmentRepo';
-import type { AppointmentSummary, PatientDetail, PatientListItem, PatientSummary, RecordStatus } from '../types';
+import type {
+  AppointmentSummary, NextAppointment, PatientDetail, PatientListItem, PatientSummary, PatientVisits, RecordStatus,
+} from '../types';
 
 interface Row {
   id: number;
@@ -145,7 +147,7 @@ export class PatientRepo {
     };
   }
 
-  async get(id: number, today: string, forUpdate = false): Promise<Omit<PatientDetail, 'appointments'> | null> {
+  async get(id: number, today: string, forUpdate = false): Promise<Omit<PatientDetail, 'appointments' | 'visits'> | null> {
     const r = (
       await this.db.query<DetailRow>(
         `SELECT ${LIST_COLUMNS}, email, address, emergency_contact_name, emergency_contact_phone, blood_group,
@@ -229,5 +231,41 @@ export class PatientRepo {
         [id, now, limit],
       )
     ).rows.map(toSummary);
+  }
+
+  /** HMS-26: next and last visit and the closed counts, over all of the patient's appointments (not the capped list). */
+  async visits(id: number, now: Date): Promise<PatientVisits> {
+    const one = async (where: string, order: string, params: unknown[]): Promise<NextAppointment | null> => {
+      const r = (
+        await this.db.query<{ id: number; starts_at: Date; doctor_name: string }>(
+          `SELECT a.id, a.starts_at, d.full_name AS doctor_name
+             FROM appointment a
+             JOIN doctor d ON d.id = a.doctor_id
+            WHERE a.patient_id = $1 AND ${where}
+            ORDER BY ${order}
+            LIMIT 1`,
+          params,
+        )
+      ).rows[0];
+      return r ? { id: r.id, starts_at: r.starts_at.toISOString(), doctor_name: r.doctor_name } : null;
+    };
+    const next = await one(`a.status = 'SCHEDULED' AND a.starts_at > $2`, 'a.starts_at, a.id', [id, now]);
+    const last = await one(`a.status = 'COMPLETED'`, 'a.starts_at DESC, a.id DESC', [id]);
+    const counts = (
+      await this.db.query<{ completed: string; cancelled: string; no_show: string }>(
+        `SELECT count(*) FILTER (WHERE status = 'COMPLETED') AS completed,
+                count(*) FILTER (WHERE status = 'CANCELLED') AS cancelled,
+                count(*) FILTER (WHERE status = 'NO_SHOW') AS no_show
+           FROM appointment WHERE patient_id = $1`,
+        [id],
+      )
+    ).rows[0];
+    return {
+      next,
+      last,
+      completed: Number(counts?.completed ?? 0),
+      cancelled: Number(counts?.cancelled ?? 0),
+      no_show: Number(counts?.no_show ?? 0),
+    };
   }
 }

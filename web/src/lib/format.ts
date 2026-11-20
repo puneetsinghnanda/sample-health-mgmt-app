@@ -24,6 +24,11 @@ export function dateTime(iso: string, timeZone: string): string {
   });
 }
 
+/** HMS-26: the local date only, as `dateTime` prints it but without the time. */
+export function date(iso: string, timeZone: string): string {
+  return new Date(iso).toLocaleDateString('en-IN', { timeZone, day: '2-digit', month: 'short', year: 'numeric' });
+}
+
 export function time(iso: string, timeZone: string): string {
   return new Date(iso).toLocaleTimeString('en-IN', { timeZone, hour: '2-digit', minute: '2-digit', hour12: false });
 }
