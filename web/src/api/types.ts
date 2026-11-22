@@ -111,7 +111,12 @@ export interface PatientDetail extends PatientSummary {
   appointments: AppointmentSummary[];
 }
 
+/** HMS-31: the appointment's doctor with current specialization, department and fee. */
+export type AppointmentDetailDoctor = AppointmentSummary['doctor'] &
+  Pick<DoctorSummary, 'specialization' | 'department' | 'feePaise'>;
+
 export interface AppointmentDetail extends AppointmentSummary {
+  doctor: AppointmentDetailDoctor;
   reason: string | null;
   cancellationReason: string | null;
   history: Array<{ event: string; fromStartsAt: string | null; toStartsAt: string | null; note: string | null; actor: string; at: string }>;
