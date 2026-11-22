@@ -13,6 +13,9 @@ import {
   type DoctorListRow, type DoctorSummary, type NextDay, type Page, type RecordStatus,
 } from '../types';
 
+/** HMS-28: the weekday filter takes the availability block coding, 1 = Monday .. 7 = Sunday. */
+const WEEKDAY_VALUES = ['1', '2', '3', '4', '5', '6', '7'] as const;
+
 export interface DaySchedule {
   doctorId: number;
   date: string;
@@ -40,6 +43,8 @@ export class DoctorService {
     if (departmentId !== undefined && !Number.isInteger(departmentId)) f.fail('departmentId', 'must be an id');
     if (specializationId !== undefined && !Number.isInteger(specializationId)) f.fail('specializationId', 'must be an id');
     const status = f.oneOf('status', RECORD_STATUSES);
+    // HMS-28: query values are strings, so oneOf (as for status), not int.
+    const weekday = f.oneOf('weekday', WEEKDAY_VALUES);
     const text = f.text('q', { max: 100 });
     f.done();
     const size = this.config.pageSize;
@@ -48,6 +53,7 @@ export class DoctorService {
       departmentId,
       specializationId,
       status,
+      weekday: weekday === undefined ? undefined : Number(weekday),
       limit: size,
       offset: (page - 1) * size,
     });
@@ -55,8 +61,16 @@ export class DoctorService {
     // Same rule as the dashboard's "Appointments today": starts today in the hospital zone, not cancelled.
     const tz = this.config.timeZone;
     const { start, end } = dayBounds(localDay(this.clock(), tz), tz);
-    const counts = await new AppointmentRepo(this.db).countTodayByDoctor(items.map((d) => d.id), start, end);
-    return { items: items.map((d) => ({ ...d, today_count: counts.get(d.id) ?? 0 })), page, page_size: size, total };
+    const ids = items.map((d) => d.id);
+    const counts = await new AppointmentRepo(this.db).countTodayByDoctor(ids, start, end);
+    // HMS-28: the list page's "Works on" column.
+    const weekdays = await new DoctorRepo(this.db).weekdaysByDoctor(ids);
+    return {
+      items: items.map((d) => ({ ...d, today_count: counts.get(d.id) ?? 0, weekdays: weekdays.get(d.id) ?? [] })),
+      page,
+      page_size: size,
+      total,
+    };
   }
 
   async get(id: number): Promise<DoctorDetail> {

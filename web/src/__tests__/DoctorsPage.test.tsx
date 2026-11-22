@@ -13,8 +13,8 @@ const BASE = {
 
 const DATA: Page<DoctorListRow> = {
   items: [
-    { ...BASE, id: 1, code: 'D-0001', fullName: 'Test Doctor 001', today_count: 3 },
-    { ...BASE, id: 2, code: 'D-0002', fullName: 'Test Doctor 002', today_count: 0 },
+    { ...BASE, id: 1, code: 'D-0001', fullName: 'Test Doctor 001', today_count: 3, weekdays: [1, 3] },
+    { ...BASE, id: 2, code: 'D-0002', fullName: 'Test Doctor 002', today_count: 0, weekdays: [] },
   ],
   page: 1,
   page_size: 20,
@@ -40,11 +40,11 @@ async function todayCell(name: string): Promise<HTMLElement> {
 }
 
 describe('DoctorsPage Today column (HMS-6)', () => {
-  it('HMS-6 REQ-1, REQ-11: adds a Today column after the existing columns', async () => {
+  it('HMS-6 REQ-1, REQ-11, HMS-28 REQ-13: Today stays last, after the Works on column', async () => {
     renderPage();
     await screen.findByText('Test Doctor 001');
     const headers = screen.getAllByRole('columnheader').map((h) => h.textContent);
-    expect(headers).toEqual(['Code', 'Name', 'Specialization', 'Department', 'Fee', 'Status', 'Today']);
+    expect(headers).toEqual(['Code', 'Name', 'Specialization', 'Department', 'Fee', 'Status', 'Works on', 'Today']);
   });
 
   it("HMS-6 REQ-2: asks the API for today's counts", async () => {

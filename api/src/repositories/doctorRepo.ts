@@ -56,6 +56,8 @@ export interface DoctorFilter {
   departmentId?: number;
   specializationId?: number;
   status?: RecordStatus;
+  /** HMS-28: 1 = Monday .. 7 = Sunday; only doctors with at least one availability block that day. */
+  weekday?: number;
   limit: number;
   offset: number;
 }
@@ -88,6 +90,10 @@ export class DoctorRepo {
     if (f.departmentId !== undefined) where.push(`d.department_id = ${p(f.departmentId)}`);
     if (f.specializationId !== undefined) where.push(`d.specialization_id = ${p(f.specializationId)}`);
     if (f.status !== undefined) where.push(`d.status = ${p(f.status)}`);
+    // EXISTS, not a join: a doctor with two blocks that day is still listed and counted once.
+    if (f.weekday !== undefined) {
+      where.push(`EXISTS (SELECT 1 FROM availability_block ab WHERE ab.doctor_id = d.id AND ab.weekday = ${p(f.weekday)})`);
+    }
     const clause = where.length ? `WHERE ${where.join(' AND ')}` : '';
     const total = Number((await this.db.query<{ n: string }>(`SELECT count(*) AS n FROM doctor d ${clause}`, params)).rows[0]?.n ?? 0);
     const rows = (
@@ -136,6 +142,17 @@ export class DoctorRepo {
         [id],
       )
     ).rows;
+  }
+
+  /** HMS-28: distinct weekdays (1 = Monday .. 7 = Sunday, ascending) per doctor; doctors without blocks are absent. */
+  async weekdaysByDoctor(ids: number[]): Promise<Map<number, number[]>> {
+    if (ids.length === 0) return new Map();
+    const { rows } = await this.db.query<{ doctor_id: number; weekdays: number[] }>(
+      `SELECT doctor_id, array_agg(DISTINCT weekday ORDER BY weekday) AS weekdays
+         FROM availability_block WHERE doctor_id = ANY($1) GROUP BY doctor_id`,
+      [ids],
+    );
+    return new Map(rows.map((r) => [r.doctor_id, r.weekdays.map(Number)]));
   }
 
   async replaceAvailability(id: number, blocks: AvailabilityBlock[]): Promise<void> {
