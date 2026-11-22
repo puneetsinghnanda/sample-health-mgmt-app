@@ -6,11 +6,17 @@ import { Pagination } from '../components/Pagination';
 import { StatusBadge } from '../components/StatusBadge';
 import { useAsync } from '../hooks/useAsync';
 import { useSettings } from '../hooks/useSettings';
-import { rupees, todayIn } from '../lib/format';
+import { WEEKDAYS, rupees, todayIn } from '../lib/format';
+
+/** HMS-28: "Mon, Wed, Sat" from weekdays 1 = Monday .. 7 = Sunday, or "No availability". */
+function worksOn(weekdays: number[]): string {
+  return weekdays.length ? weekdays.map((w) => WEEKDAYS[w - 1]!.slice(0, 3)).join(', ') : 'No availability';
+}
 
 /**
  * DOC-2: 20 per page by name; filter by department, specialization and status; search name or code.
  * HMS-6: "Today" counts each doctor's appointments today and links to them.
+ * HMS-28: "Works on" shows each doctor's weekdays and filters the list to one weekday.
  */
 export function DoctorsPage() {
   const [params, setParams] = useSearchParams();
@@ -21,6 +27,7 @@ export function DoctorsPage() {
     departmentId: params.get('departmentId') ?? '',
     specializationId: params.get('specializationId') ?? '',
     status: params.get('status') ?? '',
+    weekday: params.get('weekday') ?? '',
     page: params.get('page') ?? '1',
   };
   const list = useAsync(() => api.doctorsWithToday(filters), params.toString());
@@ -57,6 +64,10 @@ export function DoctorsPage() {
           <option value="ACTIVE">Active</option>
           <option value="INACTIVE">Inactive</option>
         </select>
+        <select aria-label="Works on" value={filters.weekday} onChange={(e) => set('weekday', e.target.value)}>
+          <option value="">Any day</option>
+          {WEEKDAYS.map((name, i) => <option key={name} value={i + 1}>{name}</option>)}
+        </select>
       </form>
       {list.error && <ErrorBanner message={list.error} />}
       {list.loading && !list.data && <Loading />}
@@ -71,6 +82,7 @@ export function DoctorsPage() {
                 <th scope="col">Department</th>
                 <th scope="col">Fee</th>
                 <th scope="col">Status</th>
+                <th scope="col">Works on</th>
                 <th scope="col">Today</th>
               </tr>
             </thead>
@@ -83,6 +95,7 @@ export function DoctorsPage() {
                   <td>{d.department.name}</td>
                   <td>{rupees(d.feePaise)}</td>
                   <td><StatusBadge status={d.status} /></td>
+                  <td>{worksOn(d.weekdays)}</td>
                   <td><Link to={`/appointments${query({ doctorId: d.id, from: today, to: today })}`}>{d.today_count}</Link></td>
                 </tr>
               ))}

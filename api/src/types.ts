@@ -45,6 +45,8 @@ export interface DoctorSummary {
 /** HMS-6: a doctors-list row with the doctor's appointments that start today, except cancelled ones. */
 export interface DoctorListRow extends DoctorSummary {
   today_count: number;
+  /** HMS-28: distinct weekdays with availability, 1 = Monday .. 7 = Sunday, ascending; [] when none. */
+  weekdays: number[];
 }
 
 export interface AppointmentSummary {
