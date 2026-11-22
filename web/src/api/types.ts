@@ -9,6 +9,9 @@ export interface Page<T> {
   total: number;
 }
 
+/** HMS-30: appointments per status over all pages of a list, ignoring its status filter. */
+export type AppointmentStatusCounts = Record<AppointmentStatus, number>;
+
 export interface Settings {
   timeZone: string;
   currency: string;

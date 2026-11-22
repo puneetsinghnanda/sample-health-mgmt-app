@@ -1,5 +1,5 @@
 import type {
-  AppointmentDetail, AppointmentSummary, AvailabilityBlock, Dashboard, DaySchedule, DoctorDetail, DoctorListRow, DoctorSummary, Page,
+  AppointmentDetail, AppointmentStatusCounts, AppointmentSummary, AvailabilityBlock, Dashboard, DaySchedule, DoctorDetail, DoctorListRow, DoctorSummary, Page,
   PatientDetail, PatientListItem, Period, RefEntry, Settings,
 } from './types';
 
@@ -74,7 +74,7 @@ export const api = {
   deletePatient: (id: number) => send<void>(`/api/patients/${id}`, { method: 'DELETE' }),
 
   appointments: (params: Record<string, string | number | undefined>) =>
-    send<Page<AppointmentSummary>>(`/api/appointments${query(params)}`),
+    send<Page<AppointmentSummary> & { status_counts: AppointmentStatusCounts }>(`/api/appointments${query(params)}`),
   appointment: (id: number | string) => send<AppointmentDetail>(`/api/appointments/${id}`),
   book: (body: { doctorId: number; patientId: number; startsAt: string; reason?: string }) =>
     send<AppointmentDetail>('/api/appointments', { method: 'POST', body }),

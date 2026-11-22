@@ -8,7 +8,9 @@ import { Fields } from '../lib/validate';
 import { AppointmentRepo } from '../repositories/appointmentRepo';
 import { DoctorRepo } from '../repositories/doctorRepo';
 import { PatientRepo } from '../repositories/patientRepo';
-import { APPOINTMENT_STATUSES, type AppointmentDetail, type AppointmentSummary, type Page } from '../types';
+import {
+  APPOINTMENT_STATUSES, type AppointmentDetail, type AppointmentStatusCounts, type AppointmentSummary, type Page,
+} from '../types';
 
 const SLOT_TAKEN = 'This slot is no longer available';
 const PATIENT_BUSY = 'The patient already has an appointment at that time';
@@ -22,7 +24,10 @@ export class AppointmentService {
   ) {}
 
   /** APT-9: by doctor or patient, date range (hospital-local days) and status. */
-  async list(query: Record<string, unknown>, page: number): Promise<Page<AppointmentSummary>> {
+  async list(
+    query: Record<string, unknown>,
+    page: number,
+  ): Promise<Page<AppointmentSummary> & { status_counts: AppointmentStatusCounts }> {
     const f = new Fields(query);
     const id = (name: string): number | undefined => {
       const v = query[name];
@@ -39,16 +44,20 @@ export class AppointmentService {
     f.done();
     const tz = this.config.timeZone;
     const size = this.config.pageSize;
-    const { items, total } = await new AppointmentRepo(this.db).list({
+    const repo = new AppointmentRepo(this.db);
+    const range = {
       doctorId,
       patientId,
-      status,
       from: from ? dayBounds(from, tz).start : undefined,
       to: to ? dayBounds(to, tz).end : undefined,
-      limit: size,
-      offset: (page - 1) * size,
-    });
-    return { items, page, page_size: size, total };
+    };
+    const { items, total } = await repo.list({ ...range, status, limit: size, offset: (page - 1) * size });
+    // HMS-30: same filters minus status, so all four statuses show and sum to the "Any status" total.
+    const counts = await repo.countByStatus(range);
+    const status_counts = Object.fromEntries(
+      APPOINTMENT_STATUSES.map((s) => [s, counts.get(s) ?? 0]),
+    ) as AppointmentStatusCounts;
+    return { items, page, page_size: size, total, status_counts };
   }
 
   async get(id: number): Promise<AppointmentDetail> {

@@ -14,6 +14,13 @@ export function AppointmentsPage() {
     ['doctorId', 'patientId', 'status', 'from', 'to', 'page'].map((k) => [k, params.get(k) ?? undefined]),
   );
   const list = useAsync(() => api.appointments(filters), params.toString());
+  /** HMS-30: the same list with only the status changed, back on page 1. */
+  const statusLink = (status: string) => {
+    const next = new URLSearchParams(params);
+    next.set('status', status);
+    next.delete('page');
+    return `/appointments?${next.toString()}`;
+  };
   const set = (key: string, value: string) => {
     const next = new URLSearchParams(params);
     if (value) next.set(key, value);
@@ -45,7 +52,18 @@ export function AppointmentsPage() {
       {list.loading && !list.data && <Loading />}
       {list.data && (
         <>
-          <p className="muted">{list.data.total} appointment(s)</p>
+          <p className="muted">
+            {list.data.total} appointment(s)
+            {' · '}
+            <span aria-label="Count per status">
+              {Object.entries(STATUS_LABEL).map(([s, label], i) => (
+                <span key={s}>
+                  {i > 0 && ' · '}
+                  <Link to={statusLink(s)}>{label} {list.data!.status_counts[s as keyof typeof STATUS_LABEL]}</Link>
+                </span>
+              ))}
+            </span>
+          </p>
           <AppointmentTable items={list.data.items} />
           <Pagination page={list.data.page} pageSize={list.data.page_size} total={list.data.total} onPage={(p) => set('page', String(p))} />
         </>

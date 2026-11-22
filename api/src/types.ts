@@ -4,6 +4,9 @@ export const RECORD_STATUSES: readonly RecordStatus[] = ['ACTIVE', 'INACTIVE'];
 export type AppointmentStatus = 'SCHEDULED' | 'COMPLETED' | 'CANCELLED' | 'NO_SHOW';
 export const APPOINTMENT_STATUSES: readonly AppointmentStatus[] = ['SCHEDULED', 'COMPLETED', 'CANCELLED', 'NO_SHOW'];
 
+/** HMS-30: appointments per status over all pages of a list, ignoring its status filter. */
+export type AppointmentStatusCounts = Record<AppointmentStatus, number>;
+
 export const GENDERS = ['FEMALE', 'MALE', 'OTHER', 'UNDISCLOSED'] as const;
 export const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-', 'UNKNOWN'] as const;
 export const SLOT_MINUTES = [10, 15, 20, 30, 45, 60] as const;
