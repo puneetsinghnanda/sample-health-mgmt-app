@@ -1,6 +1,6 @@
 import type { Queryable } from '../db';
 import { formatCode } from '../lib/codes';
-import type { AppointmentDetail, AppointmentEvent, AppointmentStatus, AppointmentSummary } from '../types';
+import type { AppointmentDetail, AppointmentEvent, AppointmentStatus, AppointmentSummary, RecordStatus } from '../types';
 
 interface SummaryRow {
   id: number;
@@ -107,7 +107,34 @@ export class AppointmentRepo {
         at: e.at.toISOString(),
       }),
     );
-    return { ...toSummary(row), reason: row.reason, cancellationReason: row.cancellation_reason, history };
+    // HMS-31: the doctor's current specialization, department and fee only; never phone or email.
+    const doc = (
+      await this.db.query<{
+        specialization_id: number; specialization_name: string; specialization_status: RecordStatus;
+        department_id: number; department_name: string; department_status: RecordStatus; fee_paise: number;
+      }>(
+        `SELECT d.specialization_id, s.name AS specialization_name, s.status AS specialization_status,
+                d.department_id, dp.name AS department_name, dp.status AS department_status, d.fee_paise
+           FROM doctor d
+           JOIN specialization s ON s.id = d.specialization_id
+           JOIN department dp ON dp.id = d.department_id
+          WHERE d.id = $1`,
+        [row.doctor_id],
+      )
+    ).rows[0]!;
+    const summary = toSummary(row);
+    return {
+      ...summary,
+      doctor: {
+        ...summary.doctor,
+        specialization: { id: doc.specialization_id, name: doc.specialization_name, status: doc.specialization_status },
+        department: { id: doc.department_id, name: doc.department_name, status: doc.department_status },
+        feePaise: doc.fee_paise,
+      },
+      reason: row.reason,
+      cancellationReason: row.cancellation_reason,
+      history,
+    };
   }
 
   /** Appointments of one doctor that overlap [from, to), except cancelled ones. */

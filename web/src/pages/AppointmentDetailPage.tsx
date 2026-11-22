@@ -1,14 +1,19 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api/client';
-import type { AppointmentDetail } from '../api/types';
+import type { AppointmentDetail, RecordStatus } from '../api/types';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { Loading } from '../components/Loading';
 import { SlotPicker } from '../components/SlotPicker';
 import { StatusBadge } from '../components/StatusBadge';
 import { useAsync } from '../hooks/useAsync';
 import { useSettings } from '../hooks/useSettings';
-import { dateTime, todayIn } from '../lib/format';
+import { dateTime, rupees, todayIn } from '../lib/format';
+
+/** HMS-31: an Inactive specialization or department keeps its name, followed by "(Inactive)". */
+function refName(ref: { name: string; status: RecordStatus }): string {
+  return ref.status === 'INACTIVE' ? `${ref.name} (Inactive)` : ref.name;
+}
 
 const EVENT_LABEL: Record<string, string> = {
   BOOKED: 'Booked',
@@ -57,6 +62,12 @@ export function AppointmentDetailPage() {
         <dd>{dateTime(a.startsAt, timeZone)} – {dateTime(a.endsAt, timeZone).split(', ').pop()}</dd>
         <dt>Doctor</dt>
         <dd><Link to={`/doctors/${a.doctor.id}`}>{a.doctor.fullName}</Link></dd>
+        <dt>Specialization</dt>
+        <dd>{refName(a.doctor.specialization)}</dd>
+        <dt>Department</dt>
+        <dd>{refName(a.doctor.department)}</dd>
+        <dt>Consultation fee</dt>
+        <dd>{rupees(a.doctor.feePaise)}</dd>
         <dt>Patient</dt>
         <dd><Link to={`/patients/${a.patient.id}`}>{a.patient.fullName}</Link></dd>
         <dt>Reason for visit</dt>
