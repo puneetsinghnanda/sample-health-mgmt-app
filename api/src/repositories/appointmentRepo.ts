@@ -55,22 +55,27 @@ export interface NewAppointment {
   reason: string | null;
 }
 
+/** The WHERE clause of the appointment list; the list and its status counts share it. */
+function listWhere(f: Omit<AppointmentFilter, 'limit' | 'offset'>): { clause: string; params: unknown[] } {
+  const where: string[] = [];
+  const params: unknown[] = [];
+  const add = (sql: string, value: unknown): void => {
+    params.push(value);
+    where.push(sql.replace('?', `$${params.length}`));
+  };
+  if (f.doctorId !== undefined) add('a.doctor_id = ?', f.doctorId);
+  if (f.patientId !== undefined) add('a.patient_id = ?', f.patientId);
+  if (f.status !== undefined) add('a.status = ?', f.status);
+  if (f.from !== undefined) add('a.starts_at >= ?', f.from);
+  if (f.to !== undefined) add('a.starts_at < ?', f.to);
+  return { clause: where.length ? `WHERE ${where.join(' AND ')}` : '', params };
+}
+
 export class AppointmentRepo {
   constructor(private readonly db: Queryable) {}
 
   async list(f: AppointmentFilter): Promise<{ items: AppointmentSummary[]; total: number }> {
-    const where: string[] = [];
-    const params: unknown[] = [];
-    const add = (sql: string, value: unknown): void => {
-      params.push(value);
-      where.push(sql.replace('?', `$${params.length}`));
-    };
-    if (f.doctorId !== undefined) add('a.doctor_id = ?', f.doctorId);
-    if (f.patientId !== undefined) add('a.patient_id = ?', f.patientId);
-    if (f.status !== undefined) add('a.status = ?', f.status);
-    if (f.from !== undefined) add('a.starts_at >= ?', f.from);
-    if (f.to !== undefined) add('a.starts_at < ?', f.to);
-    const clause = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    const { clause, params } = listWhere(f);
     const total = Number(
       (await this.db.query<{ n: string }>(`SELECT count(*) AS n FROM appointment a ${clause}`, params)).rows[0]?.n ?? 0,
     );
@@ -81,6 +86,16 @@ export class AppointmentRepo {
       )
     ).rows;
     return { items: rows.map(toSummary), total };
+  }
+
+  /** HMS-30: appointments per status for the list's filters, all pages, ignoring the status filter. */
+  async countByStatus(f: Omit<AppointmentFilter, 'status' | 'limit' | 'offset'>): Promise<Map<AppointmentStatus, number>> {
+    const { clause, params } = listWhere({ doctorId: f.doctorId, patientId: f.patientId, from: f.from, to: f.to });
+    const { rows } = await this.db.query<{ status: AppointmentStatus; n: string }>(
+      `SELECT a.status, count(*) AS n FROM appointment a ${clause} GROUP BY a.status`,
+      params,
+    );
+    return new Map(rows.map((r) => [r.status, Number(r.n)]));
   }
 
   async get(id: number, forUpdate = false): Promise<DetailRow | null> {
