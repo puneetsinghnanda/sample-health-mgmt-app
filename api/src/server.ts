@@ -1,16 +1,21 @@
 import { createApp } from './app';
 import { loadConfig } from './config';
 import { createPool } from './db';
+import { startStaleJob } from './jobs/staleJob';
+import type { AppContext } from './services';
 
 const config = loadConfig();
 const pool = createPool(config.db);
 const app = createApp(pool, config);
+let stopStaleJob: (() => void) | undefined;
 
 const server = app.listen(config.port, config.host, () => {
   console.log(`[api] Hospital Management API listening on http://${config.host}:${config.port} (${config.timeZone})`);
+  stopStaleJob = startStaleJob((app.locals.ctx as AppContext).services.appointments);
 });
 
 function shutdown(): void {
+  stopStaleJob?.();
   server.close(() => {
     void pool.end().then(() => process.exit(0));
   });

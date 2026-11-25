@@ -153,10 +153,21 @@ export class AppointmentRepo {
   }
 
   async move(id: number, startsAt: Date, endsAt: Date, actor: string): Promise<void> {
+    // HMS-34: moving a Stale appointment makes it Scheduled again.
     await this.db.query(
-      'UPDATE appointment SET starts_at = $2, ends_at = $3, updated_at = now(), updated_by = $4 WHERE id = $1',
+      `UPDATE appointment SET starts_at = $2, ends_at = $3, status = 'SCHEDULED', updated_at = now(), updated_by = $4 WHERE id = $1`,
       [id, startsAt, endsAt, actor],
     );
+  }
+
+  /** HMS-34: marks every appointment still Scheduled that started at or before `cutoff` as Stale; returns their ids. */
+  async markStale(cutoff: Date, actor: string): Promise<number[]> {
+    const { rows } = await this.db.query<{ id: number }>(
+      `UPDATE appointment SET status = 'STALE', updated_at = now(), updated_by = $2
+        WHERE status = 'SCHEDULED' AND starts_at <= $1 RETURNING id`,
+      [cutoff, actor],
+    );
+    return rows.map((r) => r.id);
   }
 
   async close(id: number, status: Exclude<AppointmentStatus, 'SCHEDULED'>, cancellationReason: string | null,
