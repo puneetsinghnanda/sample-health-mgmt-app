@@ -1,6 +1,6 @@
 // Mirrors api/src/types.ts (the API's response shapes).
 export type RecordStatus = 'ACTIVE' | 'INACTIVE';
-export type AppointmentStatus = 'SCHEDULED' | 'COMPLETED' | 'CANCELLED' | 'NO_SHOW';
+export type AppointmentStatus = 'SCHEDULED' | 'COMPLETED' | 'CANCELLED' | 'NO_SHOW' | 'STALE';
 
 export interface Page<T> {
   items: T[];
