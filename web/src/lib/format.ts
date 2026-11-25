@@ -24,6 +24,12 @@ export function dateTime(iso: string, timeZone: string): string {
   });
 }
 
+/** HMS-27: a calendar day "YYYY-MM-DD" as "10 Mar 2026"; no time-zone conversion, the API already sent the local day. */
+export function dateOnly(day: string): string {
+  const [y, m, d] = day.split('-').map(Number) as [number, number, number];
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-IN', { timeZone: 'UTC', day: '2-digit', month: 'short', year: 'numeric' });
+}
+
 export function time(iso: string, timeZone: string): string {
   return new Date(iso).toLocaleTimeString('en-IN', { timeZone, hour: '2-digit', minute: '2-digit', hour12: false });
 }

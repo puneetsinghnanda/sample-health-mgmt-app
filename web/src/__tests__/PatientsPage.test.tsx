@@ -8,8 +8,8 @@ const BASE = { dateOfBirth: '1990-01-01', age: 36, gender: 'OTHER', phone: '+91 
 
 const DATA: Page<PatientListItem> = {
   items: [
-    { ...BASE, id: 1, code: 'P-000001', fullName: 'Test Patient 001', next_appointment: null },
-    { ...BASE, id: 2, code: 'P-000002', fullName: 'Test Patient 002', next_appointment: { id: 7, starts_at: '2026-10-28T04:30:00Z', doctor_name: 'Test Doctor 001' } },
+    { ...BASE, id: 1, code: 'P-000001', fullName: 'Test Patient 001', next_appointment: null, last_visit: null },
+    { ...BASE, id: 2, code: 'P-000002', fullName: 'Test Patient 002', next_appointment: { id: 7, starts_at: '2026-10-28T04:30:00Z', doctor_name: 'Test Doctor 001' }, last_visit: null },
   ],
   page: 1,
   page_size: 20,
@@ -19,7 +19,9 @@ const DATA: Page<PatientListItem> = {
 async function nextCell(name: string): Promise<HTMLElement> {
   const row = (await screen.findByText(name)).closest('tr')!;
   const cells = within(row).getAllByRole('cell');
-  return cells[cells.length - 1]!;
+  // HMS-27 (REQ-1): "Last visit" now follows "Next appointment", so find the column by its header.
+  const headers = screen.getAllByRole('columnheader').map((h) => h.textContent);
+  return cells[headers.indexOf('Next appointment')]!;
 }
 
 describe('PatientsPage next appointment column (HMS-2)', () => {
@@ -46,6 +48,70 @@ describe('PatientsPage next appointment column (HMS-2)', () => {
     expect(link.getAttribute('href')).toBe('/appointments/7');
     expect(link.textContent).toContain('Test Doctor 001');
     expect(link.textContent).not.toBe('-');
+  });
+});
+
+describe('PatientsPage last visit column and not-seen filter (HMS-27)', () => {
+  const WITH_VISIT: Page<PatientListItem> = {
+    ...DATA,
+    items: [
+      DATA.items[0]!,
+      { ...DATA.items[1]!, last_visit: { date: '2026-03-10', doctor_name: 'Test Doctor 002' } },
+    ],
+  };
+
+  function renderAt(page: Page<PatientListItem>, url = '/patients') {
+    const fetchMock = vi.fn<(url: RequestInfo | URL) => Promise<Response>>(async () => new Response(JSON.stringify(page), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    render(
+      <MemoryRouter initialEntries={[url]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <PatientsPage />
+      </MemoryRouter>,
+    );
+    return fetchMock;
+  }
+
+  async function lastVisitCell(name: string): Promise<HTMLElement> {
+    const row = (await screen.findByText(name)).closest('tr')!;
+    const headers = screen.getAllByRole('columnheader').map((h) => h.textContent);
+    return within(row).getAllByRole('cell')[headers.indexOf('Last visit')]!;
+  }
+
+  it('HMS-27 REQ-1: the Last visit column comes directly after Next appointment', async () => {
+    renderAt(WITH_VISIT);
+    await screen.findByText('Test Patient 001');
+    const headers = screen.getAllByRole('columnheader').map((h) => h.textContent);
+    expect(headers.indexOf('Last visit')).toBe(headers.indexOf('Next appointment') + 1);
+  });
+
+  it('HMS-27 REQ-3, REQ-4: shows the date (no time) and the doctor of the last visit', async () => {
+    renderAt(WITH_VISIT);
+    expect((await lastVisitCell('Test Patient 002')).textContent).toBe('10 Mar 2026 · Test Doctor 002');
+  });
+
+  it('HMS-27 REQ-5: a patient with no visit shows "Never"', async () => {
+    renderAt(WITH_VISIT);
+    expect((await lastVisitCell('Test Patient 001')).textContent).toBe('Never');
+  });
+
+  it('HMS-27 REQ-6: the Not seen for a year filter sits next to the status filter and starts off', async () => {
+    const fetchMock = renderAt(WITH_VISIT);
+    const box = await screen.findByLabelText('Not seen for a year') as HTMLInputElement;
+    expect(box.checked).toBe(false);
+    expect(box.closest('form')).toBe(screen.getByLabelText('Status').closest('form'));
+    expect(String(fetchMock.mock.calls[0]![0])).not.toContain('not_seen');
+  });
+
+  it('HMS-27 REQ-6, REQ-11: turning the filter on sends not_seen=true and goes back to page 1', async () => {
+    const fetchMock = renderAt(WITH_VISIT, '/patients?page=2&status=INACTIVE');
+    await screen.findByText('Test Patient 001');
+    expect(String(fetchMock.mock.calls[0]![0])).toContain('page=2');
+    fireEvent.click(screen.getByLabelText('Not seen for a year'));
+    await vi.waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(1));
+    const url = String(fetchMock.mock.calls[fetchMock.mock.calls.length - 1]![0]);
+    expect(url).toContain('not_seen=true');
+    expect(url).toContain('status=INACTIVE');
+    expect(url).toContain('page=1');
   });
 });
 

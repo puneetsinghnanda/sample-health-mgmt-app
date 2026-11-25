@@ -6,7 +6,7 @@ import { Pagination } from '../components/Pagination';
 import { StatusBadge } from '../components/StatusBadge';
 import { useAsync } from '../hooks/useAsync';
 import { useSettings } from '../hooks/useSettings';
-import { dateTime, GENDER_LABEL } from '../lib/format';
+import { dateOnly, dateTime, GENDER_LABEL } from '../lib/format';
 
 /** HMS-1: the hospital zone from settings; an invalid or missing zone falls back to the default. */
 function startsAt(iso: string, timeZone: string | undefined): string {
@@ -21,7 +21,12 @@ function startsAt(iso: string, timeZone: string | undefined): string {
 export function PatientsPage() {
   const { timeZone } = useSettings();
   const [params, setParams] = useSearchParams();
-  const filters = { q: params.get('q') ?? '', status: params.get('status') ?? '', page: params.get('page') ?? '1' };
+  const filters = {
+    q: params.get('q') ?? '',
+    status: params.get('status') ?? '',
+    not_seen: params.get('not_seen') === 'true' ? 'true' : undefined,
+    page: params.get('page') ?? '1',
+  };
   const list = useAsync(() => api.patients(filters), params.toString());
   const set = (key: string, value: string) => {
     const next = new URLSearchParams(params);
@@ -45,6 +50,11 @@ export function PatientsPage() {
           <option value="ACTIVE">Active</option>
           <option value="INACTIVE">Inactive</option>
         </select>
+        {/* HMS-27: last visit more than 12 calendar months ago; never-visited patients are left out. */}
+        <label>
+          <input type="checkbox" checked={filters.not_seen === 'true'} onChange={(e) => set('not_seen', e.target.checked ? 'true' : '')} />
+          Not seen for a year
+        </label>
       </form>
       {list.error && <ErrorBanner message={list.error} />}
       {list.loading && !list.data && <Loading />}
@@ -64,6 +74,7 @@ export function PatientsPage() {
                 <th scope="col">Phone</th>
                 <th scope="col">Status</th>
                 <th scope="col">Next appointment</th>
+                <th scope="col">Last visit</th>
               </tr>
             </thead>
             <tbody>
@@ -82,6 +93,7 @@ export function PatientsPage() {
                       </Link>
                     ) : '-'}
                   </td>
+                  <td>{p.last_visit ? `${dateOnly(p.last_visit.date)} · ${p.last_visit.doctor_name}` : 'Never'}</td>
                 </tr>
               ))}
             </tbody>

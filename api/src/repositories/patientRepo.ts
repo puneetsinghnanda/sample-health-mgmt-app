@@ -17,7 +17,17 @@ interface ListRow extends Row {
   next_id: number | null;
   next_starts_at: Date | null;
   next_doctor_name: string | null;
+  last_starts_at: Date | null;
+  last_doctor_name: string | null;
 }
+
+/** HMS-27: a list item with its last visit as an instant; the service turns it into a hospital-local date. */
+export type ListItemRow = Omit<PatientListItem, 'last_visit'> & {
+  last_visit: { starts_at: Date; doctor_name: string } | null;
+};
+
+/** HMS-27: a visit is a COMPLETED appointment (latest one per patient). */
+const LAST_VISIT_AT = `(SELECT max(a.starts_at) FROM appointment a WHERE a.patient_id = patient.id AND a.status = 'COMPLETED')`;
 
 interface DetailRow extends Row {
   email: string | null;
@@ -97,9 +107,12 @@ export class PatientRepo {
     };
   }
 
-  /** HMS-1: each item also carries its earliest Scheduled appointment starting after `now`, in one query per page. */
-  async list(f: { q?: { text: string; id: number | null }; status?: RecordStatus; limit: number; offset: number },
-    today: string, now: Date): Promise<{ items: PatientListItem[]; total: number }> {
+  /**
+   * HMS-1: each item also carries its earliest Scheduled appointment starting after `now`, in one query per page.
+   * HMS-27: and its latest COMPLETED appointment; `lastVisitBefore` keeps only patients whose last visit starts before it.
+   */
+  async list(f: { q?: { text: string; id: number | null }; status?: RecordStatus; lastVisitBefore?: Date; limit: number; offset: number },
+    today: string, now: Date): Promise<{ items: ListItemRow[]; total: number }> {
     const where: string[] = [];
     const params: unknown[] = [];
     const p = (v: unknown): string => {
@@ -115,12 +128,15 @@ export class PatientRepo {
       where.push(`(${parts.join(' OR ')})`);
     }
     if (f.status) where.push(`status = ${p(f.status)}`);
+    // Never-visited patients have no last visit (NULL), so they never match.
+    if (f.lastVisitBefore) where.push(`${LAST_VISIT_AT} < ${p(f.lastVisitBefore)}`);
     const clause = where.length ? `WHERE ${where.join(' AND ')}` : '';
     const total = Number((await this.db.query<{ n: string }>(`SELECT count(*) AS n FROM patient ${clause}`, params)).rows[0]?.n ?? 0);
     const page = `SELECT ${LIST_COLUMNS} FROM patient ${clause} ORDER BY created_at DESC, id DESC LIMIT ${p(f.limit)} OFFSET ${p(f.offset)}`;
     const rows = (
       await this.db.query<ListRow>(
-        `SELECT pg.*, n.id AS next_id, n.starts_at AS next_starts_at, n.doctor_name AS next_doctor_name
+        `SELECT pg.*, n.id AS next_id, n.starts_at AS next_starts_at, n.doctor_name AS next_doctor_name,
+                l.starts_at AS last_starts_at, l.doctor_name AS last_doctor_name
            FROM (${page}) pg
            LEFT JOIN LATERAL (
              SELECT a.id, a.starts_at, d.full_name AS doctor_name
@@ -130,6 +146,14 @@ export class PatientRepo {
               ORDER BY a.starts_at, a.id
               LIMIT 1
            ) n ON true
+           LEFT JOIN LATERAL (
+             SELECT a.starts_at, d.full_name AS doctor_name
+               FROM appointment a
+               JOIN doctor d ON d.id = a.doctor_id
+              WHERE a.patient_id = pg.id AND a.status = 'COMPLETED'
+              ORDER BY a.starts_at DESC, a.id DESC
+              LIMIT 1
+           ) l ON true
           ORDER BY pg.created_at DESC, pg.id DESC`,
         params,
       )
@@ -140,6 +164,9 @@ export class PatientRepo {
         next_appointment: r.next_id === null || r.next_starts_at === null || r.next_doctor_name === null
           ? null
           : { id: r.next_id, starts_at: r.next_starts_at.toISOString(), doctor_name: r.next_doctor_name },
+        last_visit: r.last_starts_at === null || r.last_doctor_name === null
+          ? null
+          : { starts_at: r.last_starts_at, doctor_name: r.last_doctor_name },
       })),
       total,
     };
