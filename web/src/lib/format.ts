@@ -38,6 +38,7 @@ export const STATUS_LABEL: Record<AppointmentStatus, string> = {
   COMPLETED: 'Completed',
   CANCELLED: 'Cancelled',
   NO_SHOW: 'No-show',
+  STALE: 'Stale',
 };
 
 export const GENDER_LABEL: Record<string, string> = {
