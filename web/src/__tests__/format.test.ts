@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dateTime, rupees, todayIn, toPaise, weekdayName } from '../lib/format';
+import { dateOnly, dateTime, rupees, todayIn, toPaise, weekdayName } from '../lib/format';
 
 describe('formatting (INR, Asia/Kolkata)', () => {
   it('shows paise as rupees and parses rupees back to paise', () => {
@@ -14,5 +14,11 @@ describe('formatting (INR, Asia/Kolkata)', () => {
     expect(dateTime('2026-10-19T03:30:00Z', 'Asia/Kolkata')).toMatch(/19 Oct 2026.*09:00/);
     expect(todayIn('Asia/Kolkata', new Date('2026-10-19T19:00:00Z'))).toBe('2026-10-20');
     expect(weekdayName(7)).toBe('Sunday');
+  });
+
+  it('HMS-27 REQ-3: dateOnly shows a calendar day with no time and no zone shift', () => {
+    expect(dateOnly('2026-03-10')).toBe('10 Mar 2026');
+    // The first of a month stays on that day (a UTC-to-local shift could move it).
+    expect(dateOnly('2025-11-01')).toBe('01 Nov 2025');
   });
 });
