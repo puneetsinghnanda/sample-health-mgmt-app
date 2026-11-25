@@ -8,8 +8,8 @@ const BASE = { dateOfBirth: '1990-01-01', age: 36, gender: 'OTHER', phone: '+91 
 
 const DATA: Page<PatientListItem> = {
   items: [
-    { ...BASE, id: 1, code: 'P-000001', fullName: 'Test Patient 001', next_appointment: null },
-    { ...BASE, id: 2, code: 'P-000002', fullName: 'Test Patient 002', next_appointment: { id: 7, starts_at: '2026-10-28T04:30:00Z', doctor_name: 'Test Doctor 001' } },
+    { ...BASE, id: 1, code: 'P-000001', fullName: 'Test Patient 001', next_appointment: null, last_visit: null },
+    { ...BASE, id: 2, code: 'P-000002', fullName: 'Test Patient 002', next_appointment: { id: 7, starts_at: '2026-10-28T04:30:00Z', doctor_name: 'Test Doctor 001' }, last_visit: null },
   ],
   page: 1,
   page_size: 20,
@@ -19,7 +19,9 @@ const DATA: Page<PatientListItem> = {
 async function nextCell(name: string): Promise<HTMLElement> {
   const row = (await screen.findByText(name)).closest('tr')!;
   const cells = within(row).getAllByRole('cell');
-  return cells[cells.length - 1]!;
+  // HMS-27 (REQ-1): "Last visit" now follows "Next appointment", so find the column by its header.
+  const headers = screen.getAllByRole('columnheader').map((h) => h.textContent);
+  return cells[headers.indexOf('Next appointment')]!;
 }
 
 describe('PatientsPage next appointment column (HMS-2)', () => {

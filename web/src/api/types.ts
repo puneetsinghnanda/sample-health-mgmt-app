@@ -93,8 +93,15 @@ export interface NextAppointment {
   doctor_name: string;
 }
 
+/** HMS-27: the latest COMPLETED appointment; `date` is its hospital-local day (YYYY-MM-DD). */
+export interface LastVisit {
+  date: string;
+  doctor_name: string;
+}
+
 export interface PatientListItem extends PatientSummary {
   next_appointment: NextAppointment | null;
+  last_visit: LastVisit | null;
 }
 
 export interface PatientDetail extends PatientSummary {

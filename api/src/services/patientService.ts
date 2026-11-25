@@ -2,12 +2,19 @@ import type { AppConfig } from '../config';
 import { inTransaction, type Database } from '../db';
 import { formatCode, idFromCode } from '../lib/codes';
 import { conflict, notFound, pgError } from '../lib/errors';
-import { addDays, localDay } from '../lib/time';
+import { addDays, localDay, zonedToUtc } from '../lib/time';
 import { Fields } from '../lib/validate';
 import { PatientRepo, type PatientFields } from '../repositories/patientRepo';
 import { BLOOD_GROUPS, GENDERS, RECORD_STATUSES, type Page, type PatientDetail, type PatientListItem } from '../types';
 
 const LIST = { maxItems: 20, maxLength: 100 };
+
+/** HMS-27: the same calendar date 12 months earlier; a day the month lacks (29 February) clamps to its last day. */
+export function yearBefore(day: string): string {
+  const [y, m, d] = day.split('-').map(Number) as [number, number, number];
+  const last = new Date(Date.UTC(y - 1, m, 0)).getUTCDate();
+  return `${y - 1}-${String(m).padStart(2, '0')}-${String(Math.min(d, last)).padStart(2, '0')}`;
+}
 
 /** PRD §4.2, PAT-1..8. */
 export class PatientService {
@@ -25,14 +32,27 @@ export class PatientService {
     const f = new Fields(query);
     const text = f.text('q', { max: 100 });
     const status = f.oneOf('status', RECORD_STATUSES);
+    const notSeen = f.oneOf('not_seen', ['true', 'false'] as const) === 'true';
     f.done();
     const size = this.config.pageSize;
+    const tz = this.config.timeZone;
+    const today = this.today();
+    // HMS-27: last visit's local date before the same date 12 months ago = starts before that day's local midnight.
+    const lastVisitBefore = notSeen ? zonedToUtc(yearBefore(today), 0, tz) : undefined;
     const { items, total } = await new PatientRepo(this.db).list(
-      { q: text ? { text, id: idFromCode('P', text) } : undefined, status, limit: size, offset: (page - 1) * size },
-      this.today(),
+      { q: text ? { text, id: idFromCode('P', text) } : undefined, status, lastVisitBefore, limit: size, offset: (page - 1) * size },
+      today,
       this.clock(),
     );
-    return { items, page, page_size: size, total };
+    return {
+      items: items.map(({ last_visit, ...item }) => ({
+        ...item,
+        last_visit: last_visit && { date: localDay(last_visit.starts_at, tz), doctor_name: last_visit.doctor_name },
+      })),
+      page,
+      page_size: size,
+      total,
+    };
   }
 
   async get(id: number): Promise<PatientDetail> {
