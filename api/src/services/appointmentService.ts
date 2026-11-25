@@ -3,7 +3,7 @@ import { inTransaction, type Database, type Queryable } from '../db';
 import { formatCode } from '../lib/codes';
 import { conflict, fieldError, notFound, pgError } from '../lib/errors';
 import { isSlot } from '../lib/slots';
-import { dayBounds, MINUTE } from '../lib/time';
+import { DAY_MS, dayBounds, MINUTE } from '../lib/time';
 import { Fields } from '../lib/validate';
 import { AppointmentRepo } from '../repositories/appointmentRepo';
 import { DoctorRepo } from '../repositories/doctorRepo';
@@ -129,11 +129,22 @@ export class AppointmentService {
     return this.get(id);
   }
 
-  /** APT-8: only Scheduled appointments change. Locks the row for the rest of the transaction. */
+  /** HMS-34: marks every Scheduled appointment that started 24h ago or earlier as Stale, with one history event each. */
+  async markStale(actor: string): Promise<number> {
+    const cutoff = new Date(this.clock().getTime() - DAY_MS);
+    return inTransaction(this.db, async (tx) => {
+      const repo = new AppointmentRepo(tx);
+      const ids = await repo.markStale(cutoff, actor);
+      for (const id of ids) await repo.event(id, 'STALE', actor);
+      return ids.length;
+    });
+  }
+
+  /** APT-8, HMS-34: only Scheduled and Stale appointments change. Locks the row for the rest of the transaction. */
   private async scheduled(repo: AppointmentRepo, id: number) {
     const current = await repo.get(id, true);
     if (!current) throw notFound(`Appointment ${formatCode('A', id)} not found`);
-    if (current.status !== 'SCHEDULED') {
+    if (current.status !== 'SCHEDULED' && current.status !== 'STALE') {
       throw conflict(`This appointment is ${current.status.replace('_', '-').toLowerCase()} and can no longer be changed`);
     }
     return current;

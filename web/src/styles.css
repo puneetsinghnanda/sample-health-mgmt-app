@@ -78,6 +78,7 @@ tr.flagged td { background: var(--warning-bg); }
 .badge-cancelled { background: #fde8e7; color: #9b1c13; }
 .badge-no_show { background: #f1e8fd; color: #5b2b9b; }
 .badge-inactive { background: #eceff3; color: #4a525c; }
+.badge-stale { background: var(--warning-bg); color: #8a4b00; }
 .badge-warning { background: var(--warning-bg); color: #8a4b00; }
 
 .error { background: #fde8e7; border: 1px solid #f5b5b0; color: var(--danger); padding: 0.6rem 0.9rem; border-radius: 6px; }
