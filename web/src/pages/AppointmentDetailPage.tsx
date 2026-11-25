@@ -16,6 +16,7 @@ const EVENT_LABEL: Record<string, string> = {
   CANCELLED: 'Cancelled',
   COMPLETED: 'Marked completed',
   NO_SHOW: 'Marked no-show',
+  STALE: 'Marked stale',
 };
 
 /** APT-5 reschedule, APT-6 cancel, APT-7 complete / no-show, APT-11 history. */
@@ -41,7 +42,7 @@ export function AppointmentDetailPage() {
   if (loaded.loading && !loaded.data) return <Loading />;
   if (loaded.error || !loaded.data) return <ErrorBanner message={loaded.error ?? 'Appointment not found'} />;
   const a = loaded.data;
-  const scheduled = a.status === 'SCHEDULED';
+  const scheduled = a.status === 'SCHEDULED' || a.status === 'STALE';
   const started = Date.parse(a.startsAt) <= Date.now();
 
   return (
@@ -103,7 +104,10 @@ export function AppointmentDetailPage() {
 
 function Reschedule({ appointment, onDone }: { appointment: AppointmentDetail; onDone: (start: string) => void }) {
   const { timeZone } = useSettings();
-  const [date, setDate] = useState(todayIn(timeZone, new Date(appointment.startsAt)));
+  // HMS-34: a Stale appointment is in the past, so start the picker on today rather than its own day.
+  const ownDay = todayIn(timeZone, new Date(appointment.startsAt));
+  const today = todayIn(timeZone);
+  const [date, setDate] = useState(ownDay < today ? today : ownDay);
   const [start, setStart] = useState<string>();
   const day = useAsync(() => api.schedule(appointment.doctor.id, date), date);
   return (
