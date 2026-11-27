@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
-import type { Dashboard } from '../api/types';
+import type { Dashboard, OnDutyRow } from '../api/types';
 import { DashboardPage } from '../pages/DashboardPage';
 
 const DATA: Dashboard = {
@@ -65,5 +65,104 @@ describe('DashboardPage (PRD §4.4)', () => {
       </MemoryRouter>,
     );
     expect((await screen.findByRole('link', { name: /No-shows/ })).textContent).toBe('0No-shows');
+  });
+});
+
+describe('DashboardPage On duty today (HMS-23)', () => {
+  // Invented rows in the order the API sends them (most free first). 04:00Z is 09:30 in Asia/Kolkata.
+  const ROWS: OnDutyRow[] = [
+    { doctorId: 12, fullName: 'Test Doctor B', department: { name: 'Outpatient', status: 'ACTIVE' }, booked: 0, free: 4, nextFree: { start: '2026-10-19T04:00:00.000Z', label: '09:30' } },
+    { doctorId: 13, fullName: 'Test Doctor C', department: { name: 'Surgery', status: 'INACTIVE' }, booked: 2, free: 2, nextFree: { start: '2026-10-19T05:30:00.000Z', label: '11:00' } },
+    { doctorId: 11, fullName: 'Test Doctor A', department: { name: 'Outpatient', status: 'ACTIVE' }, booked: 3, free: 0, nextFree: null },
+  ];
+  const WITH_ROWS: Dashboard = { ...DATA, onDuty: ROWS };
+
+  const renderWith = (data: Dashboard | ((url: string) => Dashboard)) => {
+    const fetchMock = vi.fn(async (url: string) =>
+      new Response(JSON.stringify(typeof data === 'function' ? data(String(url)) : data), { status: 200 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    return render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <DashboardPage />
+      </MemoryRouter>,
+    );
+  };
+  const rowsOf = (container: HTMLElement) =>
+    Array.from(container.querySelectorAll('tr.on-duty-row')).map((tr) => Array.from(tr.querySelectorAll('td')).map((td) => td.textContent));
+
+  it('HMS-23 REQ-1 (S-1 AC1): the On duty today section sits below the tiles and above Next appointments', async () => {
+    const { container } = renderWith(WITH_ROWS);
+    const heading = await screen.findByRole('heading', { name: 'On duty today' });
+    const tile = screen.getByRole('link', { name: /Total patients/ });
+    const next = screen.getByRole('heading', { name: 'Next appointments' });
+    expect(tile.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(heading.compareDocumentPosition(next) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(rowsOf(container)).toHaveLength(3);
+  });
+
+  it('HMS-23 REQ-14 (S-1 AC4): an empty list shows "No doctors on duty today" and no rows', async () => {
+    const { container } = renderWith(DATA);
+    expect(await screen.findByText('No doctors on duty today')).toBeTruthy();
+    expect(rowsOf(container)).toEqual([]);
+  });
+
+  it('HMS-23 REQ-4/REQ-5/REQ-6/REQ-7/REQ-8/REQ-9/REQ-12 (S-2 AC1, S-2 AC2, S-1 AC5, S-4 AC3): each row shows name, department with the Inactive marker, booked, free and next free label or Fully booked', async () => {
+    const { container } = renderWith(WITH_ROWS);
+    await screen.findByRole('heading', { name: 'On duty today' });
+    expect(rowsOf(container)).toEqual([
+      ['Test Doctor B', 'Outpatient', '0', '4', '09:30'],
+      ['Test Doctor C', 'Surgery (Inactive)', '2', '2', '11:00'],
+      ['Test Doctor A', 'Outpatient', '3', '0', 'Fully booked'],
+    ]);
+    expect(container.textContent).not.toContain('2026-10-19T04:00');
+  });
+
+  it('HMS-23 REQ-12/REQ-19 (S-4 AC4): a doctor with free 0 and no next slot stays listed as Fully booked', async () => {
+    const passed: OnDutyRow = { doctorId: 21, fullName: 'Test Doctor D', department: { name: 'Outpatient', status: 'ACTIVE' }, booked: 0, free: 0, nextFree: null };
+    const { container } = renderWith({ ...DATA, onDuty: [passed] });
+    await screen.findByRole('heading', { name: 'On duty today' });
+    expect(rowsOf(container)).toEqual([['Test Doctor D', 'Outpatient', '0', '0', 'Fully booked']]);
+    expect(screen.queryByText('No doctors on duty today')).toBeNull();
+  });
+
+  it('HMS-23 REQ-10/REQ-11 (S-5 AC1, S-5 AC3): rows keep the API order, so most free comes first and Fully booked last', async () => {
+    const { container } = renderWith(WITH_ROWS);
+    await screen.findByRole('heading', { name: 'On duty today' });
+    expect(rowsOf(container).map((r) => r[0])).toEqual(['Test Doctor B', 'Test Doctor C', 'Test Doctor A']);
+  });
+
+  it('HMS-23 REQ-13 (S-6 AC1, S-6 AC2): the name links to the doctor page with ?date= set to the dashboard’s local today', async () => {
+    renderWith({ ...DATA, today: '2026-11-28', period: { name: 'today', from: '2026-11-28', to: '2026-11-28' }, onDuty: ROWS });
+    const link = await screen.findByRole('link', { name: 'Test Doctor A' });
+    expect(link.getAttribute('href')).toBe('/doctors/11?date=2026-11-28');
+    expect(screen.getByRole('link', { name: 'Test Doctor B' }).getAttribute('href')).toBe('/doctors/12?date=2026-11-28');
+  });
+
+  it('HMS-23 REQ-17 (S-2 AC3): contact details are never rendered, even if a response carried them', async () => {
+    const leaky = { ...ROWS[0]!, phone: '+91 00000 19999', email: 'leak@example.com' } as OnDutyRow;
+    renderWith({ ...DATA, onDuty: [leaky] });
+    await screen.findByRole('link', { name: 'Test Doctor B' });
+    expect(screen.queryByText(/\+91 00000 19999/)).toBeNull();
+    expect(screen.queryByText(/leak@example\.com/)).toBeNull();
+  });
+
+  it('HMS-23 REQ-16 (S-7 AC1): changing the Period to Last 30 days keeps the same rows', async () => {
+    const month: Dashboard = { ...WITH_ROWS, period: { name: '30d', from: '2026-09-20', to: '2026-10-19' }, totals: { ...DATA.totals, noShows: 15 } };
+    const { container } = renderWith((url) => (url.includes('period=30d') ? month : WITH_ROWS));
+    await screen.findByRole('heading', { name: 'On duty today' });
+    const before = rowsOf(container);
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: '30d' } });
+    await screen.findByRole('link', { name: /15\s*No-shows/ });
+    expect(rowsOf(container)).toEqual(before);
+  });
+
+  it('HMS-23 REQ-18 (S-7 AC2, S-7 AC3): with on-duty rows the tiles and their links are unchanged', async () => {
+    renderWith(WITH_ROWS);
+    const cancelled = await screen.findByRole('link', { name: /Cancelled/ });
+    expect(cancelled.getAttribute('href')).toBe('/appointments?status=CANCELLED&from=2026-10-19&to=2026-10-19');
+    expect(screen.getByRole('link', { name: /Total patients/ }).textContent).toBe('200Total patients');
+    expect(screen.getByRole('link', { name: /Upcoming appointments/ }).getAttribute('href')).toBe('/appointments?status=SCHEDULED&from=2026-10-19');
+    expect(screen.getByRole('heading', { name: 'Next appointments' })).toBeTruthy();
   });
 });
