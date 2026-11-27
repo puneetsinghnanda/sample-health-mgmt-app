@@ -4,7 +4,8 @@ import { lastDays } from '../lib/periods';
 import { dayBounds } from '../lib/time';
 import { Fields } from '../lib/validate';
 import { SUMMARY_SELECT, toSummary } from '../repositories/appointmentRepo';
-import type { AppointmentSummary } from '../types';
+import type { AppointmentSummary, RecordStatus } from '../types';
+import type { DoctorService } from './doctorService';
 
 export const PERIODS = ['today', '7d', '30d'] as const;
 export type Period = (typeof PERIODS)[number];
@@ -23,6 +24,18 @@ export interface Dashboard {
     noShows: number;
   };
   next: AppointmentSummary[];
+  /** HMS-23: doctors on duty today; does not depend on the period. */
+  onDuty: OnDutyRow[];
+}
+
+/** HMS-23: one doctor on duty today. nextFree is null when no free slot is left (Fully booked). */
+export interface OnDutyRow {
+  doctorId: number;
+  fullName: string;
+  department: { name: string; status: RecordStatus };
+  booked: number;
+  free: number;
+  nextFree: { start: string; label: string } | null;
 }
 
 /** PRD §4.4. Counts only: no contact details or medical history (DSH-9). */
@@ -31,6 +44,7 @@ export class DashboardService {
     private readonly db: Database,
     private readonly config: AppConfig,
     private readonly clock: () => Date,
+    private readonly doctors: Pick<DoctorService, 'onDutyToday'>,
   ) {}
 
   async get(query: Record<string, unknown>): Promise<Dashboard> {
@@ -75,6 +89,7 @@ export class DashboardService {
         noShows: Number(r.no_shows),
       },
       next,
+      onDuty: await this.doctors.onDutyToday(),
     };
   }
 }

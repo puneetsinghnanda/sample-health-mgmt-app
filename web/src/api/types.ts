@@ -140,4 +140,16 @@ export interface Dashboard {
   period: { name: Period; from: string; to: string };
   totals: { patients: number; doctors: number; appointmentsToday: number; upcoming: number; completed: number; cancelled: number; noShows: number };
   next: AppointmentSummary[];
+  /** HMS-23: doctors on duty today, most free slots first; independent of the period. */
+  onDuty: OnDutyRow[];
+}
+
+/** HMS-23: one doctor on duty today. nextFree is null when no free slot is left. */
+export interface OnDutyRow {
+  doctorId: number;
+  fullName: string;
+  department: { name: string; status: RecordStatus };
+  booked: number;
+  free: number;
+  nextFree: { start: string; label: string } | null;
 }
