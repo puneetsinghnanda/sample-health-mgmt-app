@@ -1,11 +1,20 @@
 import { useState } from 'react';
-import { api } from '../api/client';
+import { Link } from 'react-router-dom';
+import { api, query } from '../api/client';
 import type { RefEntry } from '../api/types';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { StatusBadge } from '../components/StatusBadge';
 import { useAsync } from '../hooks/useAsync';
 
 type Kind = 'departments' | 'specializations';
+
+/** HMS-29: the doctor list filter each kind's Doctors count links to. */
+const DOCTOR_FILTER: Record<Kind, string> = { departments: 'departmentId', specializations: 'specializationId' };
+
+/** HMS-29: accessible name of a Doctors count link, for example "3 doctors in Cardiology". */
+function doctorsLinkLabel(count: number, name: string): string {
+  return `${count} ${count === 1 ? 'doctor' : 'doctors'} in ${name}`;
+}
 
 /** PRD §4.5: staff maintain departments and specializations (REF-1..4). */
 export function SettingsPage() {
@@ -58,7 +67,15 @@ function RefList({ kind, title }: { kind: Kind; title: string }) {
           {(list.data ?? []).map((e) => (
             <tr key={e.id}>
               <td>{e.name}</td>
-              <td>{e.doctorCount}</td>
+              <td>
+                {e.doctorCount > 0 ? (
+                  <Link to={`/doctors${query({ [DOCTOR_FILTER[kind]]: e.id })}`} aria-label={doctorsLinkLabel(e.doctorCount, e.name)}>
+                    {e.doctorCount}
+                  </Link>
+                ) : (
+                  e.doctorCount
+                )}
+              </td>
               <td><StatusBadge status={e.status} /></td>
               <td className="row-actions">
                 <button type="button" className="link" onClick={() => rename(e)}>Rename</button>
