@@ -138,6 +138,18 @@ export class DoctorRepo {
     ).rows;
   }
 
+  /** HMS-23: Active doctors with at least one availability block on `weekday` (1 = Monday), by name. */
+  async onDutyOn(weekday: number): Promise<DoctorSummary[]> {
+    return (
+      await this.db.query<Row>(
+        `${SELECT} WHERE d.status = 'ACTIVE'
+            AND EXISTS (SELECT 1 FROM availability_block b WHERE b.doctor_id = d.id AND b.weekday = $1)
+          ORDER BY lower(d.full_name), d.id`,
+        [weekday],
+      )
+    ).rows.map(toSummary_);
+  }
+
   async replaceAvailability(id: number, blocks: AvailabilityBlock[]): Promise<void> {
     await this.db.query('DELETE FROM availability_block WHERE doctor_id = $1', [id]);
     for (const b of blocks) {

@@ -4,7 +4,7 @@ import { formatCode, idFromCode } from '../lib/codes';
 import { conflict, fieldError, notFound, pgError } from '../lib/errors';
 import { lastDays } from '../lib/periods';
 import { availabilityProblem, daySlots, withinAvailability } from '../lib/slots';
-import { addDays, dayBounds, localDay } from '../lib/time';
+import { addDays, dayBounds, isoWeekday, localDay } from '../lib/time';
 import { Fields } from '../lib/validate';
 import { AppointmentRepo } from '../repositories/appointmentRepo';
 import { DoctorRepo, type DoctorFields } from '../repositories/doctorRepo';
@@ -12,6 +12,7 @@ import {
   RECORD_STATUSES, SLOT_MINUTES, type AppointmentSummary, type AvailabilityBlock, type DoctorDetail,
   type DoctorListRow, type DoctorSummary, type NextDay, type Page, type RecordStatus,
 } from '../types';
+import type { OnDutyRow } from './dashboardService';
 
 export interface DaySchedule {
   doctorId: number;
@@ -152,6 +153,38 @@ export class DoctorService {
       { start: s.start.toISOString(), end: s.end.toISOString(), label: s.label, state, ...(taken ? { appointment: taken } : {}) }
     ));
     return { doctorId: id, date, slotMinutes: doctor.slotMinutes, slots, appointments };
+  }
+
+  /**
+   * HMS-23: Active doctors with slots today in the hospital zone, counted with the day schedule's rule.
+   * Most free slots first; ties keep the repo's name order. No contact details (DSH-9).
+   */
+  async onDutyToday(): Promise<OnDutyRow[]> {
+    const tz = this.config.timeZone;
+    const now = this.clock();
+    const today = localDay(now, tz);
+    const { start, end } = dayBounds(today, tz);
+    const repo = new DoctorRepo(this.db);
+    const appointmentRepo = new AppointmentRepo(this.db);
+    const rows: OnDutyRow[] = [];
+    for (const d of await repo.onDutyOn(isoWeekday(today))) {
+      const appointments = await appointmentRepo.occupyingBetween(d.id, start, end);
+      const states = this.slotStates(await repo.availability(d.id), d.slotMinutes, today, appointments, now.getTime());
+      // Same rule as the next 7 days: a day without slots is not available.
+      if (states.length === 0) continue;
+      const free = states.filter((x) => x.state === 'FREE');
+      const next = free[0];
+      rows.push({
+        doctorId: d.id,
+        fullName: d.fullName,
+        department: { name: d.department.name, status: d.department.status },
+        booked: states.filter((x) => x.state === 'BOOKED').length,
+        free: free.length,
+        nextFree: next ? { start: next.s.start.toISOString(), label: next.s.label } : null,
+      });
+    }
+    // Array sort is stable, so equal free counts keep lower(full_name), id from the repo.
+    return rows.sort((a, b) => b.free - a.free);
   }
 
   /** APT-10 / HMS-9: the one slot-state rule shared by the day schedule and the next 7 days. */

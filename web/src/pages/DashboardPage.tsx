@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, query } from '../api/client';
-import type { Period } from '../api/types';
+import type { OnDutyRow, Period } from '../api/types';
 import { AppointmentTable } from '../components/AppointmentTable';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { Loading } from '../components/Loading';
@@ -58,11 +58,44 @@ export function DashboardPage() {
               to={`/appointments${query({ status: 'NO_SHOW', from: data.period.from, to: data.period.to })}`}
             />
           </div>
+          <h2>On duty today</h2>
+          <OnDutyTable rows={data.onDuty} today={data.today} />
           <h2>Next appointments</h2>
           <AppointmentTable items={data.next} />
         </>
       )}
     </section>
+  );
+}
+
+/** HMS-23: who can see a walk-in today. The name opens that doctor's day schedule for today. */
+function OnDutyTable({ rows, today }: { rows: OnDutyRow[]; today: string }) {
+  if (rows.length === 0) return <p className="muted">No doctors on duty today</p>;
+  return (
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">Doctor</th>
+          <th scope="col">Department</th>
+          <th scope="col">Booked</th>
+          <th scope="col">Free</th>
+          <th scope="col">Next free</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r) => (
+          <tr key={r.doctorId} className="on-duty-row">
+            <td>
+              <Link to={`/doctors/${r.doctorId}?date=${today}`}>{r.fullName}</Link>
+            </td>
+            <td>{r.department.name}{r.department.status === 'INACTIVE' && ' (Inactive)'}</td>
+            <td>{r.booked}</td>
+            <td>{r.free}</td>
+            <td>{r.nextFree ? r.nextFree.label : 'Fully booked'}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 
