@@ -16,6 +16,7 @@ const EVENT_LABEL: Record<string, string> = {
   CANCELLED: 'Cancelled',
   COMPLETED: 'Marked completed',
   NO_SHOW: 'Marked no-show',
+  STALE: 'Marked stale',
 };
 
 /** APT-5 reschedule, APT-6 cancel, APT-7 complete / no-show, APT-11 history. */
@@ -41,7 +42,8 @@ export function AppointmentDetailPage() {
   if (loaded.loading && !loaded.data) return <Loading />;
   if (loaded.error || !loaded.data) return <ErrorBanner message={loaded.error ?? 'Appointment not found'} />;
   const a = loaded.data;
-  const scheduled = a.status === 'SCHEDULED';
+  // HMS-34: a Stale appointment is still open, so it keeps the same actions.
+  const scheduled = a.status === 'SCHEDULED' || a.status === 'STALE';
   const started = Date.parse(a.startsAt) <= Date.now();
 
   return (

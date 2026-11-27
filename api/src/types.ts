@@ -1,8 +1,8 @@
 export type RecordStatus = 'ACTIVE' | 'INACTIVE';
 export const RECORD_STATUSES: readonly RecordStatus[] = ['ACTIVE', 'INACTIVE'];
 
-export type AppointmentStatus = 'SCHEDULED' | 'COMPLETED' | 'CANCELLED' | 'NO_SHOW';
-export const APPOINTMENT_STATUSES: readonly AppointmentStatus[] = ['SCHEDULED', 'COMPLETED', 'CANCELLED', 'NO_SHOW'];
+export type AppointmentStatus = 'SCHEDULED' | 'COMPLETED' | 'CANCELLED' | 'NO_SHOW' | 'STALE';
+export const APPOINTMENT_STATUSES: readonly AppointmentStatus[] = ['SCHEDULED', 'COMPLETED', 'CANCELLED', 'NO_SHOW', 'STALE'];
 
 export const GENDERS = ['FEMALE', 'MALE', 'OTHER', 'UNDISCLOSED'] as const;
 export const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-', 'UNKNOWN'] as const;
