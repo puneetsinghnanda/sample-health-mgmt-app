@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dateTime, rupees, todayIn, toPaise, weekdayName } from '../lib/format';
+import { dateTime, rupees, STATUS_LABEL, todayIn, toPaise, weekdayName } from '../lib/format';
 
 describe('formatting (INR, Asia/Kolkata)', () => {
   it('shows paise as rupees and parses rupees back to paise', () => {
@@ -14,5 +14,10 @@ describe('formatting (INR, Asia/Kolkata)', () => {
     expect(dateTime('2026-10-19T03:30:00Z', 'Asia/Kolkata')).toMatch(/19 Oct 2026.*09:00/);
     expect(todayIn('Asia/Kolkata', new Date('2026-10-19T19:00:00Z'))).toBe('2026-10-20');
     expect(weekdayName(7)).toBe('Sunday');
+  });
+
+  it('HMS-34 REQ-12/REQ-13: labels STALE as Stale, after the existing statuses (list filter order)', () => {
+    expect(STATUS_LABEL.STALE).toBe('Stale');
+    expect(Object.keys(STATUS_LABEL)).toEqual(['SCHEDULED', 'COMPLETED', 'CANCELLED', 'NO_SHOW', 'STALE']);
   });
 });
